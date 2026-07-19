@@ -316,7 +316,7 @@ export function ParticipantsTable({
                       <span className="text-foreground">{p.trades ?? 0}</span>
                       <div className="text-muted-foreground">{formatPctPlain(p.winRate)}</div>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="text-xs text-muted-foreground" suppressHydrationWarning>
                       {formatDateTime(p.lastSyncedAt)}
                     </TableCell>
                     <TableCell>
