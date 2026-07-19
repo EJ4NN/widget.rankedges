@@ -212,7 +212,10 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                const pct = Number(p.gain ?? 0)
+                // Show absolute gain (simple % on deposited capital) rather than
+                // MetaStats' time-weighted gain, which can be wildly misleading when
+                // an account has a large mid-contest drawdown despite being profitable.
+                const pct = Number(p.absoluteGain ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>
