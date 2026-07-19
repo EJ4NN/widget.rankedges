@@ -201,7 +201,6 @@ export function ParticipantsTable({
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
                 <TableHead className="text-right">Gain</TableHead>
-                <TableHead className="text-right">Abs. Gain</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>
@@ -213,10 +212,11 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                // Mirror the public portal, which shows both the time-weighted
-                // gain and the simple absolute gain as separate columns.
-                const pct = Number(p.gain ?? 0)
-                const absPct = Number(p.absoluteGain ?? 0)
+                // Show the absolute gain (simple % on deposited capital) to match
+                // the public portal. MetaStats' time-weighted gain can be wildly
+                // misleading when an account has a large mid-contest drawdown
+                // despite being profitable (e.g. Danny: -89.91% vs +29.46%).
+                const pct = Number(p.absoluteGain ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>
@@ -301,14 +301,6 @@ export function ParticipantsTable({
                       }
                     >
                       {formatPct(pct)}
-                    </TableCell>
-                    <TableCell
-                      className={
-                        "text-right font-mono font-semibold " +
-                        (absPct >= 0 ? "text-primary" : "text-destructive")
-                      }
-                    >
-                      {formatPct(absPct)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-foreground">
                       {formatLots(p.lots)}
