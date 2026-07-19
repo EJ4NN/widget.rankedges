@@ -201,6 +201,7 @@ export function ParticipantsTable({
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
                 <TableHead className="text-right">Gain</TableHead>
+                <TableHead className="text-right">Abs. Gain</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>
@@ -212,10 +213,10 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                // Show absolute gain (simple % on deposited capital) rather than
-                // MetaStats' time-weighted gain, which can be wildly misleading when
-                // an account has a large mid-contest drawdown despite being profitable.
-                const pct = Number(p.absoluteGain ?? 0)
+                // Mirror the public portal, which shows both the time-weighted
+                // gain and the simple absolute gain as separate columns.
+                const pct = Number(p.gain ?? 0)
+                const absPct = Number(p.absoluteGain ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>
@@ -300,6 +301,14 @@ export function ParticipantsTable({
                       }
                     >
                       {formatPct(pct)}
+                    </TableCell>
+                    <TableCell
+                      className={
+                        "text-right font-mono font-semibold " +
+                        (absPct >= 0 ? "text-primary" : "text-destructive")
+                      }
+                    >
+                      {formatPct(absPct)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-foreground">
                       {formatLots(p.lots)}
