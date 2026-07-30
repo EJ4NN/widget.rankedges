@@ -10,7 +10,9 @@
  *   1. POST /api/apiSignIn { username, password } -> { token }  (JWT, 1h TTL)
  *   2. POST /api/request_contestant_record (Bearer <token>)
  *        { competitionFromDate, competitionToDate, resultFromDate, resultToDate }
- *      -> { competitionName, contestantData: [{ MT4ID, Gain, Equity, ... }] }
+ *        (dates as "yyyy-MM-dd HH:mm:ss")
+ *      -> [{ competitionName, contestantData: [{ MT4ID, Gain, Equity, ... }] }]
+ *      (an ARRAY of competitions, each with its own contestant list)
  *
  * Everything is optional: if the credentials are not set the app still works,
  * contests using this source just report "not configured" on sync.
@@ -33,6 +35,7 @@ export function isAimsRankingConfigured() {
 export type AimsMetrics = {
   mt4Id: string
   fullName: string
+  competitionName: string
   batchTitle: string | null
   balance: number
   equity: number
@@ -43,6 +46,7 @@ export type AimsMetrics = {
   floating: number
   profit: number
   lots: number
+  resultDate: string | null
 }
 
 /* --------------------------- JWT token caching --------------------------- */
@@ -105,16 +109,44 @@ function fmtDate(d: Date): string {
   )}:${p(d.getUTCSeconds())}`
 }
 
+/** One row of contestantData, mapped to our normalized metrics. */
+function mapContestant(c: Record<string, unknown>, competitionName: string): AimsMetrics | null {
+  const mt4Id = str(c.MT4ID ?? c.mt4id ?? c.mt4Id).trim()
+  if (!mt4Id) return null
+  return {
+    mt4Id,
+    fullName: str(c.FullName),
+    competitionName,
+    batchTitle: str(c.batchTitle) || null,
+    balance: num(c.Balance),
+    equity: num(c.Equity),
+    gain: num(c.Gain),
+    drawdown: num(c.Drawdown),
+    deposits: num(c.TotalDeposit),
+    withdrawals: num(c.TotalWithdrawal),
+    floating: num(c.Floating),
+    profit: num(c.ProfitLoss),
+    lots: num(c.LotSize),
+    resultDate: str(c.resultDate) || null,
+  }
+}
+
 /**
  * Fetch contestant records for a competition/result date range and return them
  * keyed by MT4 ID for O(1) matching against our participants.
+ *
+ * The API returns an ARRAY of competitions; we flatten every competition's
+ * `contestantData` into one map. When the same MT4 ID appears more than once
+ * (multiple result snapshots), the latest `resultDate` wins.
  */
 export async function fetchContestantMetrics(range: {
   competitionFrom: Date
   competitionTo: Date
   resultFrom: Date
   resultTo: Date
-}): Promise<{ competitionName: string; byMt4Id: Map<string, AimsMetrics> }> {
+  /** Optional: only keep contestants from a competition whose name matches. */
+  competitionName?: string
+}): Promise<{ competitions: string[]; byMt4Id: Map<string, AimsMetrics> }> {
   const token = await signIn()
 
   const res = await fetch(`${BASE}/api/request_contestant_record`, {
@@ -134,39 +166,42 @@ export async function fetchContestantMetrics(range: {
   })
 
   const text = await res.text()
-  let json: Record<string, unknown> = {}
+  let parsed: unknown
   try {
-    json = JSON.parse(text) as Record<string, unknown>
+    parsed = JSON.parse(text)
   } catch {
     throw new Error(`AIMSranking contestant request returned non-JSON (${res.status})`)
   }
 
-  if (json.exceptionMessage) {
-    throw new Error(`AIMSranking contestant request failed: ${String(json.exceptionMessage)}`)
+  // Error responses come back as a single object with an exceptionMessage.
+  if (!Array.isArray(parsed) && parsed && typeof parsed === "object") {
+    const obj = parsed as Record<string, unknown>
+    if (obj.exceptionMessage) {
+      throw new Error(`AIMSranking contestant request failed: ${String(obj.exceptionMessage)}`)
+    }
   }
 
-  const competitionName = str(json.competitionName)
-  const list = (json.contestantData ?? json.ContestantData ?? []) as Record<string, unknown>[]
+  const competitions = Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : []
+  const wanted = range.competitionName?.trim().toLowerCase()
 
   const byMt4Id = new Map<string, AimsMetrics>()
-  for (const c of Array.isArray(list) ? list : []) {
-    const mt4Id = str(c.MT4ID ?? c.mt4id ?? c.mt4Id).trim()
-    if (!mt4Id) continue
-    byMt4Id.set(mt4Id, {
-      mt4Id,
-      fullName: str(c.FullName),
-      batchTitle: str(c.batchTitle) || null,
-      balance: num(c.Balance),
-      equity: num(c.Equity),
-      gain: num(c.Gain),
-      drawdown: num(c.Drawdown),
-      deposits: num(c.TotalDeposit),
-      withdrawals: num(c.TotalWithdrawal),
-      floating: num(c.Floating),
-      profit: num(c.ProfitLoss),
-      lots: num(c.LotSize),
-    })
+  const names: string[] = []
+  for (const comp of competitions) {
+    const competitionName = str(comp.competitionName)
+    names.push(competitionName)
+    if (wanted && competitionName.trim().toLowerCase() !== wanted) continue
+
+    const list = (comp.contestantData ?? comp.ContestantData ?? []) as Record<string, unknown>[]
+    for (const c of Array.isArray(list) ? list : []) {
+      const m = mapContestant(c, competitionName)
+      if (!m) continue
+      const prev = byMt4Id.get(m.mt4Id)
+      // Keep the most recent snapshot when duplicates exist.
+      if (!prev || (m.resultDate ?? "") >= (prev.resultDate ?? "")) {
+        byMt4Id.set(m.mt4Id, m)
+      }
+    }
   }
 
-  return { competitionName, byMt4Id }
+  return { competitions: names, byMt4Id }
 }
