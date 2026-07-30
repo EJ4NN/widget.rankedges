@@ -236,6 +236,7 @@ export async function createBatch(contestId: number, formData: FormData) {
   return { ok: true as const }
 }
 
+
 export async function updateBatch(id: number, formData: FormData) {
   await requireAdmin()
   const name = String(formData.get("name") || "").trim()
@@ -466,6 +467,9 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
     const equity = metrics.equity
     const profit = starting > 0 ? equity - starting : metrics.profit
     const profitPct = starting > 0 ? (profit / starting) * 100 : 0
+    // RankEdges gain: profit relative to deposits only (withdrawals excluded).
+    const deposits = Number(metrics.deposits) || 0
+    const rankEdgesGain = deposits > 0 ? (metrics.profit / deposits) * 100 : 0
 
     await db
       .update(participant)
@@ -476,6 +480,7 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
         profitPct: String(profitPct),
         gain: String(metrics.gain),
         absoluteGain: String(metrics.absoluteGain),
+        rankEdgesGain: String(rankEdgesGain),
         lots: String(metrics.lots),
         maxDrawdown: String(metrics.maxDrawdown),
         deposits: String(metrics.deposits),
@@ -513,24 +518,43 @@ async function syncViaAimsRanking(
     }
   }
 
-  const start = new Date(c.startDate)
-  const end = new Date(c.endDate)
+  // The AIMS competition's own date range rarely lines up with our contest
+  // dates (its competition may end days/weeks after ours), and AIMS timestamps
+  // run ahead of UTC. Since we match purely by MT4 ID, use a generous window so
+  // date/timezone misalignment can never exclude an uploaded contestant. Our
+  // adapter keeps the latest result snapshot per MT4 ID.
   const now = new Date()
-  // Results window runs from the contest start to now (capped at the end date).
-  const resultTo = now < end ? now : end
+  const DAY = 24 * 60 * 60 * 1000
+  const start = new Date(c.startDate)
+  const lower = new Date(Math.min(start.getTime(), now.getTime()) - 365 * DAY)
+  const upper = new Date(now.getTime() + 365 * DAY)
 
   let byMt4Id: Map<string, AimsMetrics>
+  let rawContestantCount = 0
   try {
     const res = await fetchContestantMetrics({
-      competitionFrom: start,
-      competitionTo: end,
-      resultFrom: start,
-      resultTo,
+      competitionFrom: lower,
+      competitionTo: upper,
+      resultFrom: lower,
+      resultTo: upper,
     })
     byMt4Id = res.byMt4Id
+    rawContestantCount = res.rawContestantCount
   } catch (e) {
     console.log("[v0] AIMSranking fetch failed:", (e as Error).message)
-    return { ok: false as const, synced: 0, error: (e as Error).message }
+    return { ok: false as const, synced: 0, error: `AIMS Ranking sync failed: ${(e as Error).message}` }
+  }
+
+  // The feed returned contestant rows but none had a readable MT4 ID — a strong
+  // sign the API changed its field names. Surface this clearly instead of
+  // silently marking everyone "not in feed yet".
+  if (rawContestantCount > 0 && byMt4Id.size === 0) {
+    return {
+      ok: false as const,
+      synced: 0,
+      error:
+        "AIMS Ranking returned data in an unexpected format (no MT4 IDs found). The API may have changed — contact support.",
+    }
   }
 
   let synced = 0
@@ -556,10 +580,12 @@ async function syncViaAimsRanking(
         currentEquity: String(m.equity),
         profit: String(profit),
         profitPct: String(rankEdgesGain),
-        // Rank by our own gain (profit / deposit). Mirror to both gain columns
-        // so the leaderboard shows it regardless of which the admin picks.
-        gain: String(rankEdgesGain),
-        absoluteGain: String(rankEdgesGain),
+        // RankEdges gain is our own metric (profit / deposit) and lives in its
+        // own column. `gain` keeps the raw figure AIMS reports; `absoluteGain`
+        // isn't provided by AIMS so it stays 0. Admin picks the ranking metric.
+        rankEdgesGain: String(rankEdgesGain),
+        gain: String(m.gain),
+        absoluteGain: "0",
         lots: String(m.lots),
         maxDrawdown: String(m.drawdown),
         deposits: String(m.deposits),

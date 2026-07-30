@@ -1,6 +1,7 @@
 export type LeaderboardColumns = {
   gain: boolean
   absoluteGain: boolean
+  rankEdgesGain: boolean
   lots: boolean
   equity: boolean
   deposits: boolean
@@ -16,6 +17,7 @@ export type LeaderboardColumns = {
 export const DEFAULT_LEADERBOARD_COLUMNS: LeaderboardColumns = {
   gain: true,
   absoluteGain: true,
+  rankEdgesGain: true,
   lots: true,
   equity: true,
   deposits: true,
@@ -29,6 +31,7 @@ export const DEFAULT_LEADERBOARD_COLUMNS: LeaderboardColumns = {
 export const NUMERIC_COLUMN_KEYS = [
   "gain",
   "absoluteGain",
+  "rankEdgesGain",
   "lots",
   "equity",
   "deposits",
@@ -41,6 +44,7 @@ export type NumericColumnKey = (typeof NUMERIC_COLUMN_KEYS)[number]
 export const COLUMN_LABELS: Record<keyof LeaderboardColumns, string> = {
   gain: "Gain",
   absoluteGain: "Abs. Gain",
+  rankEdgesGain: "RankEdges Gain",
   lots: "Lots",
   equity: "Equity",
   deposits: "Deposits",

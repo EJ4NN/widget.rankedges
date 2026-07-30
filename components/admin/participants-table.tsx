@@ -94,9 +94,18 @@ export function ParticipantsTable({
         router.refresh()
         setLastAutoSync(new Date())
         if (!silent) {
-          if (res.pending) {
+          if (isAims && res.synced === 0 && res.pending) {
+            // Nothing matched the AIMS feed — most often the MT4 IDs uploaded to
+            // the CRM don't match the ones traders joined with.
+            toast.warning("No accounts matched the AIMS feed", {
+              description:
+                "Check that the MT4 IDs uploaded to admin.aimsrankedge.com exactly match the traders' login numbers.",
+            })
+          } else if (res.pending) {
             toast.success(`Synced ${res.synced} account(s)`, {
-              description: `${res.pending} still connecting — will retry.`,
+              description: isAims
+                ? `${res.pending} not in the AIMS feed yet.`
+                : `${res.pending} still connecting — will retry.`,
             })
           } else {
             toast.success(`Synced ${res.synced} account(s)`)
@@ -107,7 +116,7 @@ export function ParticipantsTable({
         setSyncing(false)
       }
     },
-    [contestId, router],
+    [contestId, router, isAims],
   )
 
   // Auto-sync on an interval while enabled. Runs one sync immediately on toggle-on.
@@ -225,7 +234,7 @@ export function ParticipantsTable({
                 <TableHead>Account</TableHead>
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
-                <TableHead className="text-right">Gain</TableHead>
+                <TableHead className="text-right">{isAims ? "RankEdges Gain" : "Gain"}</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>
@@ -237,7 +246,7 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                const pct = Number(p.gain ?? 0)
+                const pct = Number((isAims ? p.rankEdgesGain : p.gain) ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>

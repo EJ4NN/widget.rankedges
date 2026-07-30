@@ -64,7 +64,9 @@ export async function getLeaderboard(
       ? participant.lots
       : winnerType === "absoluteGain"
         ? participant.absoluteGain
-        : participant.gain
+        : winnerType === "rankEdgesGain"
+          ? participant.rankEdgesGain
+          : participant.gain
 
   const filters = [eq(participant.contestId, contestId), sql`${participant.status} != 'rejected'`]
   // Only filter by batch when the contest actually uses batches.
@@ -88,6 +90,7 @@ export async function getLeaderboard(
       profitPct: participant.profitPct,
       gain: participant.gain,
       absoluteGain: participant.absoluteGain,
+      rankEdgesGain: participant.rankEdgesGain,
       lots: participant.lots,
       maxDrawdown: participant.maxDrawdown,
       deposits: participant.deposits,

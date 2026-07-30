@@ -27,6 +27,7 @@ type Row = {
   profitPct: string | null
   gain: string | null
   absoluteGain: string | null
+  rankEdgesGain: string | null
   lots: string | null
   maxDrawdown: string | null
   deposits: string | null
@@ -57,6 +58,10 @@ function metricValue(r: Row, key: NumericColumnKey): MetricCell {
     }
     case "absoluteGain": {
       const n = Number(r.absoluteGain ?? 0)
+      return { text: formatPct(n), positive: n >= 0 }
+    }
+    case "rankEdgesGain": {
+      const n = Number(r.rankEdgesGain ?? 0)
       return { text: formatPct(n), positive: n >= 0 }
     }
     case "lots":
@@ -369,7 +374,7 @@ export function Leaderboard({
                         key={key}
                         className={cn(
                           "text-right font-mono tabular-nums",
-                          key === "gain" ? "font-semibold" : "",
+                          key === "gain" || key === "rankEdgesGain" ? "font-semibold" : "",
                           metricClass(cell),
                         )}
                       >
