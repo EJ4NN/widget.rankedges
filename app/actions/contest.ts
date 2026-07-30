@@ -123,12 +123,15 @@ type JoinInput = {
   contestId: number
   contestSlug: string
   nickname: string
-  realName: string
-  email?: string
-  platform: "mt4" | "mt5"
-  serverId: number
   accountLogin: string
-  investorPassword: string
+  // The fields below are only required for MetaAPI contests. AIMS Ranking
+  // contests pull results from the CRM feed matched by MT4 ID, so the trader
+  // only supplies a nickname + MT4 login.
+  realName?: string
+  email?: string
+  platform?: "mt4" | "mt5"
+  serverId?: number
+  investorPassword?: string
 }
 
 export async function joinContest(input: JoinInput) {
@@ -136,6 +139,16 @@ export async function joinContest(input: JoinInput) {
   if (!c) return { ok: false as const, error: "Contest not found" }
   if (effectiveContestStatus(c) === "ended") {
     return { ok: false as const, error: "This contest has ended" }
+  }
+
+  const isAims = c.dataSource === "aimsranking"
+
+  // Basic required fields per data source.
+  if (!input.nickname.trim() || !input.accountLogin.trim()) {
+    return { ok: false as const, error: "Nickname and MT4 login are required" }
+  }
+  if (!isAims && (!input.realName?.trim() || !input.platform || !input.serverId || !input.investorPassword?.trim())) {
+    return { ok: false as const, error: "Please complete all account details" }
   }
 
   // capacity check
@@ -150,13 +163,37 @@ export async function joinContest(input: JoinInput) {
   const dupe = await db
     .select({ id: participant.id })
     .from(participant)
-    .where(and(eq(participant.contestId, input.contestId), eq(participant.accountLogin, input.accountLogin)))
+    .where(and(eq(participant.contestId, input.contestId), eq(participant.accountLogin, input.accountLogin.trim())))
     .limit(1)
   if (dupe.length) {
     return { ok: false as const, error: "This trading account is already registered" }
   }
 
-  const server = (await db.select().from(brokerServer).where(eq(brokerServer.id, input.serverId)).limit(1))[0]
+  // AIMS Ranking: register with just nickname + MT4 login. No server, no
+  // provisioning, no investor password — the results are read from the CRM feed.
+  if (isAims) {
+    await db.insert(participant).values({
+      contestId: input.contestId,
+      nickname: input.nickname.trim(),
+      realName: input.nickname.trim(), // no separate real name collected
+      email: input.email?.trim() || null,
+      platform: "mt4",
+      serverId: null,
+      serverName: null,
+      accountLogin: input.accountLogin.trim(),
+      investorPassword: "",
+      metaApiAccountId: null,
+      status: "pending",
+      startingBalance: c.startingBalance,
+    })
+
+    revalidatePath(`/contests/${input.contestSlug}`)
+    revalidatePath(`/embed/${input.contestSlug}`)
+    return { ok: true as const }
+  }
+
+  // MetaAPI flow — full account connection.
+  const server = (await db.select().from(brokerServer).where(eq(brokerServer.id, input.serverId!)).limit(1))[0]
   if (!server) return { ok: false as const, error: "Invalid server selected" }
 
   // Enforce broker allow-list when the contest restricts brokers.
@@ -167,17 +204,16 @@ export async function joinContest(input: JoinInput) {
   }
 
   // Try to provision on MetaAPI (best-effort). If it fails, we still register
-  // the participant as pending so an admin can retry the sync. AIMS Ranking
-  // contests need no provisioning — they're matched later by MT4 ID on sync.
+  // the participant as pending so an admin can retry the sync.
   let metaApiAccountId: string | null = null
-  if (c.dataSource !== "aimsranking" && isMetaApiConfigured()) {
+  if (isMetaApiConfigured()) {
     try {
       metaApiAccountId = await provisionAccount({
         name: `${c.slug}-${input.nickname}`,
-        login: input.accountLogin,
-        password: input.investorPassword,
+        login: input.accountLogin.trim(),
+        password: input.investorPassword!,
         server: server.name,
-        platform: input.platform,
+        platform: input.platform!,
       })
     } catch (e) {
       console.log("[v0] MetaAPI provision failed:", (e as Error).message)
@@ -186,14 +222,14 @@ export async function joinContest(input: JoinInput) {
 
   await db.insert(participant).values({
     contestId: input.contestId,
-    nickname: input.nickname,
-    realName: input.realName,
-    email: input.email || null,
-    platform: input.platform,
+    nickname: input.nickname.trim(),
+    realName: input.realName!.trim(),
+    email: input.email?.trim() || null,
+    platform: input.platform!,
     serverId: server.id,
     serverName: server.name,
-    accountLogin: input.accountLogin,
-    investorPassword: input.investorPassword,
+    accountLogin: input.accountLogin.trim(),
+    investorPassword: input.investorPassword!,
     metaApiAccountId,
     status: "pending",
     startingBalance: c.startingBalance,

@@ -29,13 +29,16 @@ type Server = { id: number; name: string; company: string | null }
 export function JoinDialog({
   contestId,
   contestSlug,
+  dataSource,
   disabled,
 }: {
   contestId: number
   contestSlug: string
+  dataSource: string
   disabled?: boolean
 }) {
   const router = useRouter()
+  const isAims = dataSource === "aimsranking"
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
@@ -46,7 +49,7 @@ export function JoinDialog({
   const [realName, setRealName] = useState("")
   const [email, setEmail] = useState("")
 
-  // step 2
+  // step 2 (MetaAPI only)
   const [platform, setPlatform] = useState<"mt4" | "mt5" | "">("")
   const [servers, setServers] = useState<Server[]>([])
   const [loadingServers, setLoadingServers] = useState(false)
@@ -81,6 +84,26 @@ export function JoinDialog({
     e.preventDefault()
     if (!nickname.trim() || !realName.trim()) return
     setStep(2)
+  }
+
+  // AIMS Ranking: one-step form — nickname + MT4 login only.
+  async function handleAimsSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nickname.trim() || !accountLogin.trim()) return
+    setLoading(true)
+    const res = await joinContest({
+      contestId,
+      contestSlug,
+      nickname: nickname.trim(),
+      accountLogin: accountLogin.trim(),
+    })
+    setLoading(false)
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    setDone(true)
+    router.refresh()
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,14 +150,71 @@ export function JoinDialog({
             <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-primary" aria-hidden />
             <DialogTitle className="text-xl">You&apos;re in!</DialogTitle>
             <DialogDescription className="mt-2">
-              Your account has been submitted. Once we verify your trading account, your live stats
-              will appear on the leaderboard.
+              {isAims
+                ? "Your entry is submitted. Once your account is verified, your live stats will appear on the leaderboard."
+                : "Your account has been submitted. Once we verify your trading account, your live stats will appear on the leaderboard."}
             </DialogDescription>
             <Button className="mt-6 w-full" onClick={() => setOpen(false)}>
               Done
             </Button>
           </div>
+        ) : isAims ? (
+          /* ---------- AIMS Ranking: single-step form ---------- */
+          <>
+            <DialogHeader>
+              <DialogTitle>Enter the contest</DialogTitle>
+              <DialogDescription>
+                Pick a public nickname and enter your MT4 login. That&apos;s all we need — your
+                results are tracked automatically.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleAimsSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="nickname">Nickname (public)</Label>
+                <Input
+                  id="nickname"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="e.g. PipHunter"
+                  required
+                  maxLength={30}
+                  className="h-12"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This is the only thing shown publicly on the leaderboard.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="login">MT4 login</Label>
+                <Input
+                  id="login"
+                  inputMode="numeric"
+                  value={accountLogin}
+                  onChange={(e) => setAccountLogin(e.target.value)}
+                  placeholder="e.g. 5012345"
+                  required
+                  className="h-12"
+                />
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <ShieldCheck className="h-3 w-3 shrink-0 text-primary" aria-hidden />
+                  Make sure this matches the MT4 ID registered for the contest.
+                </p>
+              </div>
+
+              <Button
+                type="submit"
+                size="lg"
+                className="mt-1 h-12 w-full text-base font-semibold"
+                disabled={loading}
+              >
+                {loading ? "Submitting..." : "Join Contest"}
+              </Button>
+            </form>
+          </>
         ) : (
+          /* ---------- MetaAPI: two-step account connection ---------- */
           <>
             <DialogHeader>
               <DialogTitle>{step === 1 ? "Enter the contest" : "Connect your account"}</DialogTitle>
