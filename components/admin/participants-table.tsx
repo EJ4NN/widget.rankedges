@@ -343,12 +343,13 @@ export function ParticipantsTable({
                     <TableCell>
                       <Select
                         value={p.status}
-                        onValueChange={(v) =>
+                        onValueChange={(v) => {
+                          if (!v) return
                           startTransition(async () => {
                             await setParticipantStatus(p.id, v)
                             toast.success("Status updated")
                           })
-                        }
+                        }}
                       >
                         <SelectTrigger className="h-8 w-32">
                           <SelectValue />
