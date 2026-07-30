@@ -104,6 +104,21 @@ function ContestForm({
         />
       </div>
       <div className="flex flex-col gap-2">
+        <Label htmlFor="dataSource">Data source</Label>
+        <p className="text-xs text-muted-foreground">
+          Where live metrics are pulled from when you sync this contest.
+        </p>
+        <select
+          id="dataSource"
+          name="dataSource"
+          defaultValue={contest?.dataSource ?? "metaapi"}
+          className="h-11 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="metaapi">MetaAPI — connect each MT4/MT5 account (investor password)</option>
+          <option value="aimsranking">AIMS Ranking — pull results from the AIMSCAP API (by MT4 ID)</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-2">
         <Label>Eligible brokers</Label>
         <p className="text-xs text-muted-foreground">
           Tick which brokers can join. Leave all unticked to allow every broker.

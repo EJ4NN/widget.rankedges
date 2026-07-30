@@ -167,9 +167,10 @@ export async function joinContest(input: JoinInput) {
   }
 
   // Try to provision on MetaAPI (best-effort). If it fails, we still register
-  // the participant as pending so an admin can retry the sync.
+  // the participant as pending so an admin can retry the sync. AIMS Ranking
+  // contests need no provisioning — they're matched later by MT4 ID on sync.
   let metaApiAccountId: string | null = null
-  if (isMetaApiConfigured()) {
+  if (c.dataSource !== "aimsranking" && isMetaApiConfigured()) {
     try {
       metaApiAccountId = await provisionAccount({
         name: `${c.slug}-${input.nickname}`,
