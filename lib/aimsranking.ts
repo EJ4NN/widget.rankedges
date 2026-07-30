@@ -111,23 +111,35 @@ function fmtDate(d: Date): string {
 
 /** One row of contestantData, mapped to our normalized metrics. */
 function mapContestant(c: Record<string, unknown>, competitionName: string): AimsMetrics | null {
-  const mt4Id = str(c.MT4ID ?? c.mt4id ?? c.mt4Id).trim()
+  // The API's actual JSON casing (mT4ID, profitLoss, totalDeposit, lotSize...)
+  // differs from the documented PascalCase, so match keys case-insensitively.
+  const lower: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(c)) lower[k.toLowerCase()] = v
+  const get = (...names: string[]) => {
+    for (const n of names) {
+      const v = lower[n.toLowerCase()]
+      if (v != null) return v
+    }
+    return undefined
+  }
+
+  const mt4Id = str(get("mt4id", "mt4 id")).trim()
   if (!mt4Id) return null
   return {
     mt4Id,
-    fullName: str(c.FullName),
+    fullName: str(get("fullname")),
     competitionName,
-    batchTitle: str(c.batchTitle) || null,
-    balance: num(c.Balance),
-    equity: num(c.Equity),
-    gain: num(c.Gain),
-    drawdown: num(c.Drawdown),
-    deposits: num(c.TotalDeposit),
-    withdrawals: num(c.TotalWithdrawal),
-    floating: num(c.Floating),
-    profit: num(c.ProfitLoss),
-    lots: num(c.LotSize),
-    resultDate: str(c.resultDate) || null,
+    batchTitle: str(get("batchtitle")) || null,
+    balance: num(get("balance")),
+    equity: num(get("equity")),
+    gain: num(get("gain")),
+    drawdown: num(get("drawdown")),
+    deposits: num(get("totaldeposit")),
+    withdrawals: num(get("totalwithdrawal")),
+    floating: num(get("floating")),
+    profit: num(get("profitloss")),
+    lots: num(get("lotsize")),
+    resultDate: str(get("resultdate")) || null,
   }
 }
 
@@ -176,8 +188,14 @@ export async function fetchContestantMetrics(range: {
   // Error responses come back as a single object with an exceptionMessage.
   if (!Array.isArray(parsed) && parsed && typeof parsed === "object") {
     const obj = parsed as Record<string, unknown>
+    const msg = String(obj.exceptionMessage ?? "")
+    // "No competition data found" just means the window matched nothing — treat
+    // it as an empty result so the sync marks everyone pending instead of erroring.
+    if (msg && /no competition data/i.test(msg)) {
+      return { competitions: [], byMt4Id: new Map() }
+    }
     if (obj.exceptionMessage) {
-      throw new Error(`AIMSranking contestant request failed: ${String(obj.exceptionMessage)}`)
+      throw new Error(`AIMSranking contestant request failed: ${msg}`)
     }
   }
 

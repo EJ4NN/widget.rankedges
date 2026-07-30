@@ -513,19 +513,24 @@ async function syncViaAimsRanking(
     }
   }
 
-  const start = new Date(c.startDate)
-  const end = new Date(c.endDate)
+  // The AIMS competition's own date range rarely lines up with our contest
+  // dates (its competition may end days/weeks after ours), and AIMS timestamps
+  // run ahead of UTC. Since we match purely by MT4 ID, use a generous window so
+  // date/timezone misalignment can never exclude an uploaded contestant. Our
+  // adapter keeps the latest result snapshot per MT4 ID.
   const now = new Date()
-  // Results window runs from the contest start to now (capped at the end date).
-  const resultTo = now < end ? now : end
+  const DAY = 24 * 60 * 60 * 1000
+  const start = new Date(c.startDate)
+  const lower = new Date(Math.min(start.getTime(), now.getTime()) - 365 * DAY)
+  const upper = new Date(now.getTime() + 365 * DAY)
 
   let byMt4Id: Map<string, AimsMetrics>
   try {
     const res = await fetchContestantMetrics({
-      competitionFrom: start,
-      competitionTo: end,
-      resultFrom: start,
-      resultTo,
+      competitionFrom: lower,
+      competitionTo: upper,
+      resultFrom: lower,
+      resultTo: upper,
     })
     byMt4Id = res.byMt4Id
   } catch (e) {
