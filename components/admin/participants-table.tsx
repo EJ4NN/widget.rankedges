@@ -24,7 +24,7 @@ import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { AddParticipantDialog } from "@/components/admin/add-participant-dialog"
 import { toast } from "sonner"
-import { Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
+import { Download, Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 type BatchOption = { id: number; name: string }
@@ -35,17 +35,25 @@ const NO_BATCH_VALUE = "none"
 
 export function ParticipantsTable({
   contestId,
+  contestSlug,
+  dataSource,
   participants,
   metaApiConfigured,
   servers,
   batches,
 }: {
   contestId: number
+  contestSlug: string
+  dataSource: string
   participants: Participant[]
   metaApiConfigured: boolean
   servers: Server[]
   batches: BatchOption[]
 }) {
+  const isAims = dataSource === "aimsranking"
+  // AIMS contests sync via the AIMS Ranking API (no MetaAPI needed), so syncing
+  // is always available for them; MetaAPI contests require the token.
+  const canSync = isAims || metaApiConfigured
   const router = useRouter()
   const [reveal, setReveal] = useState<Record<number, boolean>>({})
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -104,11 +112,11 @@ export function ParticipantsTable({
 
   // Auto-sync on an interval while enabled. Runs one sync immediately on toggle-on.
   useEffect(() => {
-    if (!autoSync || !metaApiConfigured) return
+    if (!autoSync || !canSync) return
     void runSync(true)
     const id = setInterval(() => void runSync(true), AUTO_SYNC_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [autoSync, metaApiConfigured, runSync])
+  }, [autoSync, canSync, runSync])
 
   function handleSync() {
     void runSync(false)
@@ -130,11 +138,23 @@ export function ParticipantsTable({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AddParticipantDialog contestId={contestId} servers={servers} hasBatches={batches.length > 0} />
+          {isAims && (
+            <Button
+              size="sm"
+              variant="secondary"
+              nativeButton={false}
+              disabled={participants.length === 0}
+              render={<a href={`/admin/contests/${contestId}/aims-export`} />}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Download for AIMS
+            </Button>
+          )}
           <Button
             size="sm"
             variant={autoSync ? "default" : "secondary"}
             onClick={() => setAutoSync((v) => !v)}
-            disabled={!metaApiConfigured}
+            disabled={!canSync}
             aria-pressed={autoSync}
           >
             {autoSync ? (
@@ -149,13 +169,13 @@ export function ParticipantsTable({
               size="sm"
               variant="secondary"
               onClick={handleSyncSelected}
-              disabled={syncing || !metaApiConfigured}
+              disabled={syncing || !canSync}
             >
               <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
               Sync selected ({selected.size})
             </Button>
           )}
-          <Button size="sm" onClick={handleSync} disabled={syncing || !metaApiConfigured}>
+          <Button size="sm" onClick={handleSync} disabled={syncing || !canSync}>
             <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
             {syncing ? "Syncing..." : "Sync all"}
           </Button>
@@ -169,11 +189,16 @@ export function ParticipantsTable({
         </p>
       )}
 
-      {!metaApiConfigured && (
+      {isAims ? (
+        <p className="border-b border-border bg-primary/5 px-5 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-primary">AIMS Ranking source</span> — download the contestant
+          sheet, upload it to admin.aimsrankedge.com, then sync to pull results (matched by MT4 ID).
+        </p>
+      ) : !metaApiConfigured ? (
         <p className="border-b border-border bg-secondary/40 px-5 py-2 text-xs text-muted-foreground">
           MetaAPI is not configured — add METAAPI_TOKEN to enable automatic live syncing.
         </p>
-      )}
+      ) : null}
 
       {participants.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">No participants yet.</div>
