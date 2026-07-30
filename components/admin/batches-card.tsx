@@ -81,7 +81,7 @@ function BatchForm({
 
       <div className="flex flex-col gap-2">
         <Label>Winner determined by</Label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {WINNER_TYPES.map((t) => (
             <button
               key={t}

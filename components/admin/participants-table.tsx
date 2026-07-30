@@ -234,7 +234,7 @@ export function ParticipantsTable({
                 <TableHead>Account</TableHead>
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
-                <TableHead className="text-right">Gain</TableHead>
+                <TableHead className="text-right">{isAims ? "RankEdges Gain" : "Gain"}</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>
@@ -246,7 +246,7 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                const pct = Number(p.gain ?? 0)
+                const pct = Number((isAims ? p.rankEdgesGain : p.gain) ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>

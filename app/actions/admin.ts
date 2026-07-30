@@ -467,6 +467,9 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
     const equity = metrics.equity
     const profit = starting > 0 ? equity - starting : metrics.profit
     const profitPct = starting > 0 ? (profit / starting) * 100 : 0
+    // RankEdges gain: profit relative to deposits only (withdrawals excluded).
+    const deposits = Number(metrics.deposits) || 0
+    const rankEdgesGain = deposits > 0 ? (metrics.profit / deposits) * 100 : 0
 
     await db
       .update(participant)
@@ -477,6 +480,7 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
         profitPct: String(profitPct),
         gain: String(metrics.gain),
         absoluteGain: String(metrics.absoluteGain),
+        rankEdgesGain: String(rankEdgesGain),
         lots: String(metrics.lots),
         maxDrawdown: String(metrics.maxDrawdown),
         deposits: String(metrics.deposits),
@@ -576,10 +580,12 @@ async function syncViaAimsRanking(
         currentEquity: String(m.equity),
         profit: String(profit),
         profitPct: String(rankEdgesGain),
-        // Rank by our own gain (profit / deposit). Mirror to both gain columns
-        // so the leaderboard shows it regardless of which the admin picks.
-        gain: String(rankEdgesGain),
-        absoluteGain: String(rankEdgesGain),
+        // RankEdges gain is our own metric (profit / deposit) and lives in its
+        // own column. `gain` keeps the raw figure AIMS reports; `absoluteGain`
+        // isn't provided by AIMS so it stays 0. Admin picks the ranking metric.
+        rankEdgesGain: String(rankEdgesGain),
+        gain: String(m.gain),
+        absoluteGain: "0",
         lots: String(m.lots),
         maxDrawdown: String(m.drawdown),
         deposits: String(m.deposits),

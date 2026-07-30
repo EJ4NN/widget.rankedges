@@ -118,7 +118,7 @@ export const batch = pgTable("batch", {
   startDate: timestamp("startDate").notNull(),
   endDate: timestamp("endDate").notNull(),
   prizePool: text("prizePool"),
-  winnerType: text("winnerType").default("gain").notNull(), // gain | absoluteGain | lots
+  winnerType: text("winnerType").default("gain").notNull(), // gain | absoluteGain | rankEdgesGain | lots
   advanceCount: integer("advanceCount").default(0).notNull(), // top N advance to next round (0 = none)
   sortOrder: integer("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -146,6 +146,9 @@ export const participant = pgTable("participant", {
   // MetaStats-derived metrics
   gain: numeric("gain", { precision: 12, scale: 4 }).default("0"), // % return (time-weighted)
   absoluteGain: numeric("absoluteGain", { precision: 12, scale: 4 }).default("0"), // % absolute gain
+  // RankEdges gain = profit / deposit * 100 (withdrawals excluded). Computed by us
+  // for every data source, distinct from the broker/AIMS-reported gain figures.
+  rankEdgesGain: numeric("rankEdgesGain", { precision: 12, scale: 4 }).default("0"),
   lots: numeric("lots", { precision: 18, scale: 2 }).default("0"), // total traded volume
   maxDrawdown: numeric("maxDrawdown", { precision: 10, scale: 4 }).default("0"),
   deposits: numeric("deposits", { precision: 18, scale: 2 }).default("0"),
