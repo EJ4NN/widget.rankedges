@@ -158,7 +158,13 @@ export async function fetchContestantMetrics(range: {
   resultTo: Date
   /** Optional: only keep contestants from a competition whose name matches. */
   competitionName?: string
-}): Promise<{ competitions: string[]; byMt4Id: Map<string, AimsMetrics> }> {
+}): Promise<{
+  competitions: string[]
+  byMt4Id: Map<string, AimsMetrics>
+  /** Total contestant rows the feed returned, before MT4-ID parsing. If this is
+   *  > 0 but byMt4Id is empty, the API likely changed its field names. */
+  rawContestantCount: number
+}> {
   const token = await signIn()
 
   const res = await fetch(`${BASE}/api/request_contestant_record`, {
@@ -192,7 +198,7 @@ export async function fetchContestantMetrics(range: {
     // "No competition data found" just means the window matched nothing — treat
     // it as an empty result so the sync marks everyone pending instead of erroring.
     if (msg && /no competition data/i.test(msg)) {
-      return { competitions: [], byMt4Id: new Map() }
+      return { competitions: [], byMt4Id: new Map(), rawContestantCount: 0 }
     }
     if (obj.exceptionMessage) {
       throw new Error(`AIMSranking contestant request failed: ${msg}`)
@@ -204,6 +210,7 @@ export async function fetchContestantMetrics(range: {
 
   const byMt4Id = new Map<string, AimsMetrics>()
   const names: string[] = []
+  let rawContestantCount = 0
   for (const comp of competitions) {
     const competitionName = str(comp.competitionName)
     names.push(competitionName)
@@ -211,6 +218,7 @@ export async function fetchContestantMetrics(range: {
 
     const list = (comp.contestantData ?? comp.ContestantData ?? []) as Record<string, unknown>[]
     for (const c of Array.isArray(list) ? list : []) {
+      rawContestantCount++
       const m = mapContestant(c, competitionName)
       if (!m) continue
       const prev = byMt4Id.get(m.mt4Id)
@@ -221,5 +229,5 @@ export async function fetchContestantMetrics(range: {
     }
   }
 
-  return { competitions: names, byMt4Id }
+  return { competitions: names, byMt4Id, rawContestantCount }
 }

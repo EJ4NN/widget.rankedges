@@ -236,6 +236,7 @@ export async function createBatch(contestId: number, formData: FormData) {
   return { ok: true as const }
 }
 
+
 export async function updateBatch(id: number, formData: FormData) {
   await requireAdmin()
   const name = String(formData.get("name") || "").trim()
@@ -525,6 +526,7 @@ async function syncViaAimsRanking(
   const upper = new Date(now.getTime() + 365 * DAY)
 
   let byMt4Id: Map<string, AimsMetrics>
+  let rawContestantCount = 0
   try {
     const res = await fetchContestantMetrics({
       competitionFrom: lower,
@@ -533,9 +535,22 @@ async function syncViaAimsRanking(
       resultTo: upper,
     })
     byMt4Id = res.byMt4Id
+    rawContestantCount = res.rawContestantCount
   } catch (e) {
     console.log("[v0] AIMSranking fetch failed:", (e as Error).message)
-    return { ok: false as const, synced: 0, error: (e as Error).message }
+    return { ok: false as const, synced: 0, error: `AIMS Ranking sync failed: ${(e as Error).message}` }
+  }
+
+  // The feed returned contestant rows but none had a readable MT4 ID — a strong
+  // sign the API changed its field names. Surface this clearly instead of
+  // silently marking everyone "not in feed yet".
+  if (rawContestantCount > 0 && byMt4Id.size === 0) {
+    return {
+      ok: false as const,
+      synced: 0,
+      error:
+        "AIMS Ranking returned data in an unexpected format (no MT4 IDs found). The API may have changed — contact support.",
+    }
   }
 
   let synced = 0
