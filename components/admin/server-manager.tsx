@@ -52,7 +52,7 @@ export function ServerManager({ servers }: { servers: BrokerServer[] }) {
           </div>
           <div className="flex flex-col gap-2">
             <Label>Platform</Label>
-            <Select value={platform} onValueChange={setPlatform} required>
+            <Select value={platform} onValueChange={(v) => v && setPlatform(v)} required>
               <SelectTrigger>
                 <SelectValue placeholder="Select platform" />
               </SelectTrigger>

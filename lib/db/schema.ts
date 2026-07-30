@@ -94,6 +94,9 @@ export const contest = pgTable("contest", {
   startDate: timestamp("startDate").notNull(),
   endDate: timestamp("endDate").notNull(),
   status: text("status").default("upcoming").notNull(), // upcoming | live | ended
+  // Where live metrics are pulled from: "metaapi" (per-account provisioning) or
+  // "aimsranking" (bulk contestant records from the AIMSCAP Ranking API).
+  dataSource: text("dataSource").default("metaapi").notNull(),
   maxParticipants: integer("maxParticipants"),
   posterUrl: text("posterUrl"), // wide banner shown on the contest page
   thumbnailUrl: text("thumbnailUrl"), // square-ish card image on listings

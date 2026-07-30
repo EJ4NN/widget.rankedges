@@ -76,6 +76,8 @@ export default async function AdminContestPage({
 
       <ParticipantsTable
         contestId={contestId}
+        contestSlug={c.slug}
+        dataSource={c.dataSource}
         participants={participants}
         metaApiConfigured={isMetaApiConfigured()}
         batches={batches.map((b) => ({ id: b.id, name: b.name }))}

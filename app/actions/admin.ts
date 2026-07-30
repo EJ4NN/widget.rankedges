@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/get-session"
 import { and, asc, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
+import { isAimsRankingConfigured, fetchContestantMetrics, type AimsMetrics } from "@/lib/aimsranking"
 import { put } from "@vercel/blob"
 import { resolveColumns, type LeaderboardColumns } from "@/lib/leaderboard-columns"
 import { normalizeWinnerType } from "@/lib/winner-type"
@@ -66,10 +67,15 @@ export async function listContests() {
 
 function slugify(s: string) {
   return s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+  .toLowerCase()
+  .trim()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "")
+  }
+
+// Only accept known data sources; anything else falls back to the MetaAPI default.
+function normalizeDataSource(v: FormDataEntryValue | null): "metaapi" | "aimsranking" {
+  return String(v) === "aimsranking" ? "aimsranking" : "metaapi"
 }
 
 export async function createContest(formData: FormData) {
@@ -86,6 +92,7 @@ export async function createContest(formData: FormData) {
   const thumbnailUrl = String(formData.get("thumbnailUrl") || "").trim()
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
+  const dataSource = normalizeDataSource(formData.get("dataSource"))
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -109,6 +116,7 @@ export async function createContest(formData: FormData) {
     thumbnailUrl: thumbnailUrl || null,
     sponsorLogoUrl: sponsorLogoUrl || null,
     allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
+    dataSource,
     status: "upcoming",
   })
 
@@ -130,6 +138,7 @@ export async function updateContest(id: number, formData: FormData) {
   const thumbnailUrl = String(formData.get("thumbnailUrl") || "").trim()
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
+  const dataSource = normalizeDataSource(formData.get("dataSource"))
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -150,6 +159,7 @@ export async function updateContest(id: number, formData: FormData) {
       thumbnailUrl: thumbnailUrl || null,
       sponsorLogoUrl: sponsorLogoUrl || null,
       allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
+      dataSource,
     })
     .where(eq(contest.id, id))
 
@@ -404,14 +414,23 @@ export async function deleteParticipant(id: number) {
  */
 export async function syncContest(contestId: number, participantIds?: number[]) {
   await requireAdmin()
-  if (!isMetaApiConfigured()) {
-    return { ok: false as const, synced: 0, error: "METAAPI_TOKEN is not configured" }
-  }
+
+  const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
+  if (!c) return { ok: false as const, synced: 0, error: "Contest not found" }
 
   // When participantIds is provided, only sync those rows; otherwise sync all.
   const allRows = await db.select().from(participant).where(eq(participant.contestId, contestId))
   const idSet = participantIds && participantIds.length > 0 ? new Set(participantIds) : null
   const rows = idSet ? allRows.filter((p) => idSet.has(p.id)) : allRows
+
+  // AIMSranking: one bulk fetch, matched by MT4 ID (= accountLogin). No provisioning.
+  if (c.dataSource === "aimsranking") {
+    return syncViaAimsRanking(contestId, c, rows)
+  }
+
+  if (!isMetaApiConfigured()) {
+    return { ok: false as const, synced: 0, error: "METAAPI_TOKEN is not configured" }
+  }
 
   let synced = 0
   let pending = 0
@@ -463,6 +482,88 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
         withdrawals: String(metrics.withdrawals),
         trades: metrics.trades,
         winRate: String(metrics.winRate),
+        status: p.status === "pending" ? "active" : p.status,
+        lastSyncedAt: new Date(),
+      })
+      .where(eq(participant.id, p.id))
+    synced++
+  }
+
+  revalidatePath("/admin")
+  revalidatePath(`/admin/contests/${contestId}`)
+  return { ok: true as const, synced, pending }
+}
+
+/**
+ * Sync a contest whose data source is the AIMSCAP Ranking API. One bulk request
+ * returns every contestant for the competition date range; we match each of our
+ * participants by MT4 ID (= accountLogin) and update their metrics. No account
+ * provisioning is involved.
+ */
+async function syncViaAimsRanking(
+  contestId: number,
+  c: typeof contest.$inferSelect,
+  rows: (typeof participant.$inferSelect)[],
+) {
+  if (!isAimsRankingConfigured()) {
+    return {
+      ok: false as const,
+      synced: 0,
+      error: "AIMSRANKING_API_USERNAME / AIMSRANKING_API_PASSWORD are not configured",
+    }
+  }
+
+  const start = new Date(c.startDate)
+  const end = new Date(c.endDate)
+  const now = new Date()
+  // Results window runs from the contest start to now (capped at the end date).
+  const resultTo = now < end ? now : end
+
+  let byMt4Id: Map<string, AimsMetrics>
+  try {
+    const res = await fetchContestantMetrics({
+      competitionFrom: start,
+      competitionTo: end,
+      resultFrom: start,
+      resultTo,
+    })
+    byMt4Id = res.byMt4Id
+  } catch (e) {
+    console.log("[v0] AIMSranking fetch failed:", (e as Error).message)
+    return { ok: false as const, synced: 0, error: (e as Error).message }
+  }
+
+  let synced = 0
+  let pending = 0
+  for (const p of rows) {
+    const m = byMt4Id.get(p.accountLogin.trim())
+    if (!m) {
+      // Contestant not found in the AIMS feed yet (not approved / no results).
+      pending++
+      continue
+    }
+
+    // RankEdges gain: profit relative to total deposit only, ignoring
+    // withdrawals. profit comes from the AIMS ProfitLoss field (fallback to
+    // equity - deposit if not provided). If there's no deposit, gain is 0.
+    const profit = m.profit || m.equity - m.deposits
+    const rankEdgesGain = m.deposits > 0 ? (profit / m.deposits) * 100 : 0
+
+    await db
+      .update(participant)
+      .set({
+        currentBalance: String(m.balance),
+        currentEquity: String(m.equity),
+        profit: String(profit),
+        profitPct: String(rankEdgesGain),
+        // Rank by our own gain (profit / deposit). Mirror to both gain columns
+        // so the leaderboard shows it regardless of which the admin picks.
+        gain: String(rankEdgesGain),
+        absoluteGain: String(rankEdgesGain),
+        lots: String(m.lots),
+        maxDrawdown: String(m.drawdown),
+        deposits: String(m.deposits),
+        withdrawals: String(m.withdrawals),
         status: p.status === "pending" ? "active" : p.status,
         lastSyncedAt: new Date(),
       })
