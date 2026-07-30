@@ -543,9 +543,11 @@ async function syncViaAimsRanking(
       continue
     }
 
-    const starting = Number(p.startingBalance ?? 0) || m.deposits || 0
-    const profit = m.profit || (starting > 0 ? m.equity - starting : 0)
-    const profitPct = starting > 0 ? (profit / starting) * 100 : m.gain
+    // RankEdges gain: profit relative to total deposit only, ignoring
+    // withdrawals. profit comes from the AIMS ProfitLoss field (fallback to
+    // equity - deposit if not provided). If there's no deposit, gain is 0.
+    const profit = m.profit || m.equity - m.deposits
+    const rankEdgesGain = m.deposits > 0 ? (profit / m.deposits) * 100 : 0
 
     await db
       .update(participant)
@@ -553,11 +555,11 @@ async function syncViaAimsRanking(
         currentBalance: String(m.balance),
         currentEquity: String(m.equity),
         profit: String(profit),
-        profitPct: String(profitPct),
-        gain: String(m.gain),
-        // AIMS exposes a single gain figure; mirror it to absoluteGain so the
-        // leaderboard shows a value regardless of which gain column admin picks.
-        absoluteGain: String(m.gain),
+        profitPct: String(rankEdgesGain),
+        // Rank by our own gain (profit / deposit). Mirror to both gain columns
+        // so the leaderboard shows it regardless of which the admin picks.
+        gain: String(rankEdgesGain),
+        absoluteGain: String(rankEdgesGain),
         lots: String(m.lots),
         maxDrawdown: String(m.drawdown),
         deposits: String(m.deposits),

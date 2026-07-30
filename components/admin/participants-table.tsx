@@ -24,7 +24,7 @@ import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { AddParticipantDialog } from "@/components/admin/add-participant-dialog"
 import { toast } from "sonner"
-import { Download, Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
+import { CheckCircle2, Clock, Download, Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 type BatchOption = { id: number; name: string }
@@ -291,7 +291,22 @@ export function ParticipantsTable({
                     <TableCell className="font-mono text-xs">
                       <span className="uppercase text-muted-foreground">{p.platform}</span>{" "}
                       {p.accountLogin}
-                      <div className="text-muted-foreground">{p.serverName}</div>
+                      {p.serverName ? (
+                        <div className="text-muted-foreground">{p.serverName}</div>
+                      ) : null}
+                      {isAims ? (
+                        p.lastSyncedAt ? (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-sans text-[10px] font-medium text-primary">
+                            <CheckCircle2 className="h-3 w-3" />
+                            In AIMS feed
+                          </span>
+                        ) : (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-medium text-warning">
+                            <Clock className="h-3 w-3" />
+                            Not in feed yet
+                          </span>
+                        )
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
