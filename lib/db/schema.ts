@@ -136,6 +136,11 @@ export const participant = pgTable("participant", {
   realName: text("realName").notNull(), // private, admin only
   email: text("email"),
   platform: text("platform").notNull(), // "mt4" | "mt5"
+  // Per-participant data source override: "metaapi" | "aimsranking". When null,
+  // the participant inherits the contest's dataSource. Lets an admin pull a
+  // specific trader from the AIMS Ranking feed even in a MetaAPI contest (e.g.
+  // when MetaAPI account slots are full or credentials can't be provisioned).
+  dataSource: text("dataSource"),
   serverId: integer("serverId"),
   serverName: text("serverName"),
   accountLogin: text("accountLogin").notNull(),

@@ -18,7 +18,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { deleteParticipant, setParticipantStatus, syncContest, setParticipantBatch } from "@/app/actions/admin"
+import {
+  deleteParticipant,
+  setParticipantStatus,
+  syncContest,
+  setParticipantBatch,
+  setParticipantDataSource,
+} from "@/app/actions/admin"
 import { formatLots, formatMoney, formatPct, formatPctPlain, formatDateTime } from "@/lib/format"
 import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
@@ -32,6 +38,7 @@ type BatchOption = { id: number; name: string }
 const AUTO_SYNC_INTERVAL_MS = 60_000 // 1 minute
 
 const NO_BATCH_VALUE = "none"
+const INHERIT_SOURCE = "inherit"
 
 export function ParticipantsTable({
   contestId,
@@ -153,7 +160,12 @@ export function ParticipantsTable({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AddParticipantDialog contestId={contestId} servers={servers} hasBatches={batches.length > 0} />
+          <AddParticipantDialog
+            contestId={contestId}
+            servers={servers}
+            hasBatches={batches.length > 0}
+            contestDataSource={dataSource}
+          />
           {isAims && (
             <Button
               size="sm"
@@ -239,6 +251,7 @@ export function ParticipantsTable({
                 {batches.length > 0 ? <TableHead>Batch</TableHead> : null}
                 <TableHead>Real name</TableHead>
                 <TableHead>Account</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
                 <TableHead className="text-right">{isAims ? "RankEdges Gain" : "Gain"}</TableHead>
@@ -323,6 +336,43 @@ export function ParticipantsTable({
                           </span>
                         )
                       ) : null}
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={p.dataSource ?? INHERIT_SOURCE}
+                        onValueChange={(v) => {
+                          if (!v) return
+                          startTransition(async () => {
+                            await setParticipantDataSource(
+                              p.id,
+                              v === INHERIT_SOURCE ? null : (v as "metaapi" | "aimsranking"),
+                            )
+                            toast.success("Data source updated", {
+                              description: "Re-sync to pull this trader from the new source.",
+                            })
+                            router.refresh()
+                          })
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-28">
+                          <SelectValue>
+                            {(value) =>
+                              value === "metaapi"
+                                ? "MetaAPI"
+                                : value === "aimsranking"
+                                  ? "AIMS"
+                                  : `Auto (${dataSource === "aimsranking" ? "AIMS" : "MetaAPI"})`
+                            }
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={INHERIT_SOURCE}>
+                            Auto ({dataSource === "aimsranking" ? "AIMS" : "MetaAPI"})
+                          </SelectItem>
+                          <SelectItem value="metaapi">MetaAPI</SelectItem>
+                          <SelectItem value="aimsranking">AIMS Ranking</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

@@ -355,6 +355,9 @@ export async function addParticipant(contestId: number, formData: FormData) {
   const serverName = String(formData.get("serverName") || "").trim()
   const accountLogin = String(formData.get("accountLogin") || "").trim()
   const investorPassword = String(formData.get("investorPassword") || "").trim()
+  // Optional per-participant data source: "" (inherit contest), "metaapi", "aimsranking".
+  const dataSourceInput = String(formData.get("dataSource") || "").trim()
+  const dataSource = dataSourceInput === "metaapi" || dataSourceInput === "aimsranking" ? dataSourceInput : null
 
   if (!nickname || !realName || !platform || !serverName || !accountLogin || !investorPassword) {
     return { ok: false as const, error: "All fields except email are required" }
@@ -365,6 +368,9 @@ export async function addParticipant(contestId: number, formData: FormData) {
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, error: "Contest not found" }
+
+  // Which source this trader will actually sync from (override wins over contest default).
+  const effectiveSource = dataSource ?? c.dataSource
 
   // Auto-assign to the batch whose active period covers now (admins can move
   // participants between batches later from the participants table).
@@ -382,8 +388,10 @@ export async function addParticipant(contestId: number, formData: FormData) {
   }
 
   // Best-effort provisioning on MetaAPI so live stats can sync right away.
+  // AIMS-sourced participants are matched by MT4 ID against the AIMS feed and
+  // never touch MetaAPI, so we skip provisioning for them entirely.
   let metaApiAccountId: string | null = null
-  if (isMetaApiConfigured()) {
+  if (effectiveSource !== "aimsranking" && isMetaApiConfigured()) {
     try {
       metaApiAccountId = await provisionAccount({
         name: `${c.slug}-${nickname}`,
@@ -404,6 +412,7 @@ export async function addParticipant(contestId: number, formData: FormData) {
     realName,
     email: email || null,
     platform,
+    dataSource,
     serverName,
     accountLogin,
     investorPassword,
@@ -414,7 +423,19 @@ export async function addParticipant(contestId: number, formData: FormData) {
 
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
-  return { ok: true as const, provisioned: Boolean(metaApiAccountId) }
+  return {
+    ok: true as const,
+    provisioned: Boolean(metaApiAccountId),
+    source: effectiveSource === "aimsranking" ? ("aimsranking" as const) : ("metaapi" as const),
+  }
+}
+
+/** Change a single participant's data source (null = inherit contest default). */
+export async function setParticipantDataSource(id: number, source: "metaapi" | "aimsranking" | null) {
+  await requireAdmin()
+  await db.update(participant).set({ dataSource: source }).where(eq(participant.id, id))
+  revalidatePath("/admin")
+  return { ok: true as const }
 }
 
 export async function setParticipantStatus(id: number, status: string) {
@@ -444,21 +465,56 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
   const idSet = participantIds && participantIds.length > 0 ? new Set(participantIds) : null
   const rows = idSet ? allRows.filter((p) => idSet.has(p.id)) : allRows
 
-  // AIMSranking: one bulk fetch, matched by MT4 ID (= accountLogin). No provisioning.
-  if (c.dataSource === "aimsranking") {
-    return syncViaAimsRanking(contestId, c, rows)
-  }
-
-  if (!isMetaApiConfigured()) {
-    return { ok: false as const, synced: 0, error: "METAAPI_TOKEN is not configured" }
-  }
+  // Each participant can override the contest's data source. Partition the rows
+  // so AIMS-sourced traders are matched against the AIMS feed while the rest go
+  // through MetaAPI provisioning — both in a single sync run.
+  const aimsRows = rows.filter((p) => (p.dataSource ?? c.dataSource) === "aimsranking")
+  const metaRows = rows.filter((p) => (p.dataSource ?? c.dataSource) !== "aimsranking")
 
   let synced = 0
   let pending = 0
   // The most relevant provisioning failure, surfaced to the admin so a
   // "cannot sync" is explained instead of silently counted as pending.
   let provisionError: string | null = null
-  for (const p of rows) {
+
+  // --- AIMS Ranking participants (bulk fetch, matched by MT4 ID) ---
+  if (aimsRows.length > 0) {
+    const r = await syncViaAimsRanking(contestId, c, aimsRows)
+    if (!r.ok) {
+      // If there are no MetaAPI rows to fall back on, surface the AIMS error
+      // directly; otherwise carry it as a warning so the MetaAPI sync still runs.
+      if (metaRows.length === 0) return r
+      provisionError = r.error
+    } else {
+      synced += r.synced
+      pending += r.pending ?? 0
+      if (r.warning) provisionError = r.warning
+    }
+  }
+
+  // --- MetaAPI participants ---
+  if (metaRows.length === 0) {
+    revalidatePath("/admin")
+    revalidatePath(`/admin/contests/${contestId}`)
+    return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
+  }
+
+  if (!isMetaApiConfigured()) {
+    // No MetaAPI token: if we already synced AIMS rows, report partial success.
+    if (aimsRows.length > 0) {
+      revalidatePath("/admin")
+      revalidatePath(`/admin/contests/${contestId}`)
+      return {
+        ok: true as const,
+        synced,
+        pending: pending + metaRows.length,
+        warning: "METAAPI_TOKEN is not configured — MetaAPI participants were skipped.",
+      }
+    }
+    return { ok: false as const, synced: 0, error: "METAAPI_TOKEN is not configured" }
+  }
+
+  for (const p of metaRows) {
     // Provision on MetaAPI if we don't have an account id yet (e.g. joined
     // before the token was set, or broker detection was still in progress).
     let accountId = p.metaApiAccountId
