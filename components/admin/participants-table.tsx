@@ -94,7 +94,14 @@ export function ParticipantsTable({
         router.refresh()
         setLastAutoSync(new Date())
         if (!silent) {
-          if (isAims && res.synced === 0 && res.pending) {
+          if (res.warning) {
+            // A real, actionable failure (e.g. MetaAPI slots full, bad
+            // credentials) — show why instead of a vague "still connecting".
+            toast.warning("Some accounts could not be connected", {
+              description: res.warning,
+              duration: 8000,
+            })
+          } else if (isAims && res.synced === 0 && res.pending) {
             // Nothing matched the AIMS feed — most often the MT4 IDs uploaded to
             // the CRM don't match the ones traders joined with.
             toast.warning("No accounts matched the AIMS feed", {

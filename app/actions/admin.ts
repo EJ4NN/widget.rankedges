@@ -455,6 +455,9 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
 
   let synced = 0
   let pending = 0
+  // The most relevant provisioning failure, surfaced to the admin so a
+  // "cannot sync" is explained instead of silently counted as pending.
+  let provisionError: string | null = null
   for (const p of rows) {
     // Provision on MetaAPI if we don't have an account id yet (e.g. joined
     // before the token was set, or broker detection was still in progress).
@@ -470,7 +473,16 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
         })
         await db.update(participant).set({ metaApiAccountId: accountId }).where(eq(participant.id, p.id))
       } catch (e) {
-        console.log("[v0] provision during sync failed:", (e as Error).message)
+        const msg = (e as Error).message
+        console.log("[v0] provision during sync failed:", msg)
+        // Translate MetaAPI's raw errors into something an admin can act on.
+        provisionError = /E_RESOURCE_SLOTS|resource slots/i.test(msg)
+          ? "MetaAPI account limit reached — your MetaAPI plan has no free account slots. Remove an unused connected account or upgrade your MetaAPI subscription to add more."
+          : /failed to authenticate|invalid account|account disabled|invalid.*password/i.test(msg)
+            ? `Broker rejected the login for account ${p.accountLogin}. Check the login, investor password and server name.`
+            : /\.srv file|server .* not found|check the server name/i.test(msg)
+              ? `Server name for account ${p.accountLogin} is not recognized by MetaAPI. Check the exact MT4/MT5 server name.`
+              : `MetaAPI could not connect account ${p.accountLogin}: ${msg}`
         pending++
         continue
       }
@@ -516,7 +528,7 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
 
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
-  return { ok: true as const, synced, pending }
+  return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
 }
 
 /**
@@ -619,5 +631,5 @@ async function syncViaAimsRanking(
 
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
-  return { ok: true as const, synced, pending }
+  return { ok: true as const, synced, pending, warning: undefined as string | undefined }
 }
