@@ -49,6 +49,21 @@ export function toDateTimeLocal(d: Date | string | null | undefined) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+/**
+ * Convert an <input type="datetime-local"> value (a wall-clock time with no
+ * timezone) into a UTC ISO string. MUST run client-side so the browser's
+ * timezone is applied — this mirrors `toDateTimeLocal` (which also uses local
+ * time) so dates round-trip correctly. Without this, a server action parsing
+ * the raw string treats it as UTC and shifts the time by the admin's offset.
+ * Returns "" for empty/invalid input.
+ */
+export function fromDateTimeLocal(value: string | null | undefined) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toISOString()
+}
+
 export function formatDate(d: Date | string | null | undefined) {
   if (!d) return "—"
   return new Date(d).toLocaleDateString("en-US", {
