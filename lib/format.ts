@@ -64,12 +64,13 @@ export function fromDateTimeLocal(value: string | null | undefined) {
   return date.toISOString()
 }
 
-export function formatDate(d: Date | string | null | undefined) {
+export function formatDate(d: Date | string | null | undefined, timeZone?: string | null) {
   if (!d) return "—"
   return new Date(d).toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
   })
 }
 
@@ -87,12 +88,30 @@ export function formatDateUTC(d: Date | string | null | undefined) {
   })
 }
 
-export function formatDateTime(d: Date | string | null | undefined) {
+export function formatDateTime(d: Date | string | null | undefined, timeZone?: string | null) {
   if (!d) return "—"
   return new Date(d).toLocaleString("en-US", {
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  })
+}
+
+/**
+ * Full date + year + time (e.g. "Aug 3, 2026, 06:00 AM"), rendered in the
+ * given IANA timezone. Used for public contest date ranges so viewers see the
+ * exact start/end times the organizer entered.
+ */
+export function formatDateTimeFull(d: Date | string | null | undefined, timeZone?: string | null) {
+  if (!d) return "—"
+  return new Date(d).toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   })
 }

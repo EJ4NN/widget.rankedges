@@ -93,6 +93,10 @@ export const contest = pgTable("contest", {
     .notNull(),
   startDate: timestamp("startDate").notNull(),
   endDate: timestamp("endDate").notNull(),
+  // IANA timezone (e.g. "Asia/Singapore") the dates were entered in, captured
+  // from the admin's browser on save. Public dates are displayed in this zone
+  // so everyone sees the same wall-clock dates the organizer intended.
+  timeZone: text("timeZone"),
   status: text("status").default("upcoming").notNull(), // upcoming | live | ended
   // Where live metrics are pulled from: "metaapi" (per-account provisioning) or
   // "aimsranking" (bulk contestant records from the AIMSCAP Ranking API).
