@@ -354,16 +354,8 @@ export function ParticipantsTable({
                           })
                         }}
                       >
-                        <SelectTrigger className="h-8 w-28">
-                          <SelectValue>
-                            {(value) =>
-                              value === "metaapi"
-                                ? "MetaAPI"
-                                : value === "aimsranking"
-                                  ? "AIMS"
-                                  : `Auto (${dataSource === "aimsranking" ? "AIMS" : "MetaAPI"})`
-                            }
-                          </SelectValue>
+                        <SelectTrigger className="h-8 w-32">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={INHERIT_SOURCE}>
