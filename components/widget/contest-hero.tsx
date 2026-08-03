@@ -43,7 +43,7 @@ export function ContestHero({
     {
       icon: Calendar,
       label: "Dates",
-      value: `${formatDate(contest.startDate)} – ${formatDate(contest.endDate)}`,
+      value: `${formatDate(contest.startDate, contest.timeZone)} – ${formatDate(contest.endDate, contest.timeZone)}`,
     },
   ]
 

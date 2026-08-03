@@ -49,6 +49,9 @@ function ContestForm({
       const raw = String(formData.get(field) || "")
       if (raw) formData.set(field, fromDateTimeLocal(raw))
     }
+    // Record the admin's IANA timezone so public dates display in the same zone
+    // the organizer entered them in.
+    formData.set("timeZone", Intl.DateTimeFormat().resolvedOptions().timeZone)
     await onSubmit(formData)
   }
 

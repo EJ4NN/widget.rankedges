@@ -87,6 +87,7 @@ export async function createContest(formData: FormData) {
   const startingBalance = String(formData.get("startingBalance") || "10000")
   const startDate = String(formData.get("startDate") || "")
   const endDate = String(formData.get("endDate") || "")
+  const timeZone = String(formData.get("timeZone") || "").trim()
   const maxParticipants = String(formData.get("maxParticipants") || "")
   const posterUrl = String(formData.get("posterUrl") || "").trim()
   const thumbnailUrl = String(formData.get("thumbnailUrl") || "").trim()
@@ -111,6 +112,7 @@ export async function createContest(formData: FormData) {
     startingBalance,
     startDate: new Date(startDate),
     endDate: new Date(endDate),
+    timeZone: timeZone || null,
     maxParticipants: maxParticipants ? Number(maxParticipants) : null,
     posterUrl: posterUrl || null,
     thumbnailUrl: thumbnailUrl || null,
@@ -133,6 +135,7 @@ export async function updateContest(id: number, formData: FormData) {
   const startingBalance = String(formData.get("startingBalance") || "10000")
   const startDate = String(formData.get("startDate") || "")
   const endDate = String(formData.get("endDate") || "")
+  const timeZone = String(formData.get("timeZone") || "").trim()
   const maxParticipants = String(formData.get("maxParticipants") || "")
   const posterUrl = String(formData.get("posterUrl") || "").trim()
   const thumbnailUrl = String(formData.get("thumbnailUrl") || "").trim()
@@ -154,6 +157,7 @@ export async function updateContest(id: number, formData: FormData) {
       startingBalance,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
+      timeZone: timeZone || null,
       maxParticipants: maxParticipants ? Number(maxParticipants) : null,
       posterUrl: posterUrl || null,
       thumbnailUrl: thumbnailUrl || null,
