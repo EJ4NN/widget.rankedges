@@ -67,7 +67,9 @@ type ProvisionInput = {
  * We reuse the same transaction id and poll a few times before giving up so the
  * caller can register the participant as "pending" and retry later.
  */
-export async function findAccountByLogin(login: string): Promise<string | null> {
+export async function findAccountByLogin(
+  login: string,
+): Promise<{ id: string; metastatsApiEnabled: boolean } | null> {
   if (!TOKEN) return null
   try {
     const res = await fetch(`${PROVISIONING_BASE}/users/current/accounts?limit=1000`, {
@@ -79,13 +81,36 @@ export async function findAccountByLogin(login: string): Promise<string | null> 
     const arr = Array.isArray(json)
       ? json
       : ((json as { items?: unknown[] })?.items ?? [])
-    const match = (arr as Array<{ _id?: string; id?: string; login?: string | number }>).find(
-      (a) => String(a.login) === String(login),
-    )
-    return match ? (match._id ?? match.id ?? null) : null
+    const match = (
+      arr as Array<{ _id?: string; id?: string; login?: string | number; metastatsApiEnabled?: boolean }>
+    ).find((a) => String(a.login) === String(login))
+    if (!match) return null
+    const id = match._id ?? match.id
+    return id ? { id, metastatsApiEnabled: Boolean(match.metastatsApiEnabled) } : null
   } catch (e) {
     console.log("[v0] findAccountByLogin failed:", (e as Error).message)
     return null
+  }
+}
+
+/**
+ * Enable the MetaStats API on an existing account. Accounts added manually in
+ * the MetaAPI dashboard often have it OFF, and MetaStats `/metrics` never
+ * returns data (endless 202) until it's enabled. The standard update endpoint
+ * rejects the flag, so we use the dedicated enable endpoint.
+ */
+export async function enableMetaStats(accountId: string): Promise<void> {
+  if (!TOKEN) return
+  try {
+    const res = await fetch(
+      `${PROVISIONING_BASE}/users/current/accounts/${accountId}/enable-metastats-api`,
+      { method: "POST", headers: { "auth-token": TOKEN, Accept: "application/json" } },
+    )
+    if (!res.ok && res.status !== 204) {
+      console.log("[v0] enableMetaStats non-ok:", res.status, (await res.text()).slice(0, 200))
+    }
+  } catch (e) {
+    console.log("[v0] enableMetaStats failed:", (e as Error).message)
   }
 }
 
@@ -97,8 +122,11 @@ export async function provisionAccount(input: ProvisionInput): Promise<string> {
   // E_RESOURCE_SLOTS when the plan's account slots are full.
   const existing = await findAccountByLogin(input.login)
   if (existing) {
-    await deployAccount(existing)
-    return existing
+    // Manually-added accounts often have MetaStats off — turn it on so
+    // `/metrics` can return data instead of hanging on 202 forever.
+    if (!existing.metastatsApiEnabled) await enableMetaStats(existing.id)
+    await deployAccount(existing.id)
+    return existing.id
   }
 
   const txId = transactionId()
