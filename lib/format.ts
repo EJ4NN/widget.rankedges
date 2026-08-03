@@ -98,3 +98,20 @@ export function formatDateTime(d: Date | string | null | undefined, timeZone?: s
     ...(timeZone ? { timeZone } : {}),
   })
 }
+
+/**
+ * Full date + year + time (e.g. "Aug 3, 2026, 06:00 AM"), rendered in the
+ * given IANA timezone. Used for public contest date ranges so viewers see the
+ * exact start/end times the organizer entered.
+ */
+export function formatDateTimeFull(d: Date | string | null | undefined, timeZone?: string | null) {
+  if (!d) return "—"
+  return new Date(d).toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  })
+}

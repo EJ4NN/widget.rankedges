@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Countdown } from "@/components/widget/countdown"
 import { JoinDialog } from "@/components/widget/join-dialog"
-import { formatDate, formatMoney } from "@/lib/format"
+import { formatDateTimeFull, formatMoney } from "@/lib/format"
 import type { Contest } from "@/lib/db/schema"
 import { Calendar, Trophy, Users, Wallet } from "lucide-react"
 
@@ -43,7 +43,7 @@ export function ContestHero({
     {
       icon: Calendar,
       label: "Dates",
-      value: `${formatDate(contest.startDate, contest.timeZone)} – ${formatDate(contest.endDate, contest.timeZone)}`,
+      value: `${formatDateTimeFull(contest.startDate, contest.timeZone)} – ${formatDateTimeFull(contest.endDate, contest.timeZone)}`,
     },
   ]
 
