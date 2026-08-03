@@ -67,8 +67,39 @@ type ProvisionInput = {
  * We reuse the same transaction id and poll a few times before giving up so the
  * caller can register the participant as "pending" and retry later.
  */
+export async function findAccountByLogin(login: string): Promise<string | null> {
+  if (!TOKEN) return null
+  try {
+    const res = await fetch(`${PROVISIONING_BASE}/users/current/accounts?limit=1000`, {
+      headers: { "auth-token": TOKEN, Accept: "application/json" },
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as unknown
+    const arr = Array.isArray(json)
+      ? json
+      : ((json as { items?: unknown[] })?.items ?? [])
+    const match = (arr as Array<{ _id?: string; id?: string; login?: string | number }>).find(
+      (a) => String(a.login) === String(login),
+    )
+    return match ? (match._id ?? match.id ?? null) : null
+  } catch (e) {
+    console.log("[v0] findAccountByLogin failed:", (e as Error).message)
+    return null
+  }
+}
+
 export async function provisionAccount(input: ProvisionInput): Promise<string> {
   if (!TOKEN) throw new Error("METAAPI_TOKEN is not configured")
+
+  // Reuse an account that already exists on MetaAPI (e.g. added manually in the
+  // dashboard). This avoids a needless create call that would fail with
+  // E_RESOURCE_SLOTS when the plan's account slots are full.
+  const existing = await findAccountByLogin(input.login)
+  if (existing) {
+    await deployAccount(existing)
+    return existing
+  }
 
   const txId = transactionId()
   const body = JSON.stringify({
