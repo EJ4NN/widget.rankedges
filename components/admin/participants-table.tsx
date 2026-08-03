@@ -355,7 +355,14 @@ export function ParticipantsTable({
                         }}
                       >
                         <SelectTrigger className="h-8 w-32">
-                          <SelectValue />
+                          {/* Explicit label — a bare SelectValue falls back to the raw enum string. */}
+                          <SelectValue>
+                            {p.dataSource === "metaapi"
+                              ? "MetaAPI"
+                              : p.dataSource === "aimsranking"
+                                ? "AIMS"
+                                : `Auto (${dataSource === "aimsranking" ? "AIMS" : "MetaAPI"})`}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={INHERIT_SOURCE}>
