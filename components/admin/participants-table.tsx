@@ -69,6 +69,11 @@ export function ParticipantsTable({
   const [autoSync, setAutoSync] = useState(false)
   const [lastAutoSync, setLastAutoSync] = useState<Date | null>(null)
   const syncingRef = useRef(false)
+  // "Last synced" is formatted in the admin's local timezone, which differs
+  // from the server's (UTC) — gate it on mount so SSR and first client render
+  // agree, then swap in the local-time value after hydration.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const allSelected = participants.length > 0 && selected.size === participants.length
   const someSelected = selected.size > 0 && !allSelected
@@ -417,8 +422,8 @@ export function ParticipantsTable({
                       <span className="text-foreground">{p.trades ?? 0}</span>
                       <div className="text-muted-foreground">{formatPctPlain(p.winRate)}</div>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(p.lastSyncedAt)}
+                    <TableCell className="text-xs text-muted-foreground" suppressHydrationWarning>
+                      {mounted ? formatDateTime(p.lastSyncedAt) : "—"}
                     </TableCell>
                     <TableCell>
                       <Select
