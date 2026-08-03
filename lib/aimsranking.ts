@@ -47,6 +47,14 @@ export type AimsMetrics = {
   profit: number
   lots: number
   resultDate: string | null
+  /**
+   * True only when AIMS has posted actual trading results for this contestant.
+   * When a trader is registered but results aren't live yet, AIMS returns "-"
+   * for balance/equity/gain/profitLoss (only deposits/withdrawals are known).
+   * In that state we must NOT compute a gain (equity 0 - deposit = bogus
+   * -100%); the sync treats `hasResult: false` as pending.
+   */
+  hasResult: boolean
 }
 
 /* --------------------------- JWT token caching --------------------------- */
@@ -125,6 +133,22 @@ function mapContestant(c: Record<string, unknown>, competitionName: string): Aim
 
   const mt4Id = str(get("mt4id", "mt4 id")).trim()
   if (!mt4Id) return null
+
+  // A value is a "real" result only if it parses to a finite number — AIMS uses
+  // "-" (or blank) as a placeholder before results are posted.
+  const hasNum = (...names: string[]) => {
+    const v = get(...names)
+    if (v == null) return false
+    if (typeof v === "number") return Number.isFinite(v)
+    const cleaned = String(v).replace(/[^0-9.-]/g, "")
+    return cleaned !== "" && cleaned !== "-" && Number.isFinite(Number.parseFloat(cleaned))
+  }
+  // Results are live once any of the traded-performance fields is a real number.
+  // Deposits/withdrawals alone don't count — a registered-but-not-started trader
+  // has those but no equity/gain yet.
+  const hasResult =
+    hasNum("equity") || hasNum("balance") || hasNum("gain") || hasNum("profitloss")
+
   return {
     mt4Id,
     fullName: str(get("fullname")),
@@ -140,6 +164,7 @@ function mapContestant(c: Record<string, unknown>, competitionName: string): Aim
     profit: num(get("profitloss")),
     lots: num(get("lotsize")),
     resultDate: str(get("resultdate")) || null,
+    hasResult,
   }
 }
 
