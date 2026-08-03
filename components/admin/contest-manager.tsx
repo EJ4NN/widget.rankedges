@@ -70,6 +70,19 @@ function ContestForm({
           defaultValue={contest?.description ?? ""}
         />
       </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="slug">URL slug</Label>
+        <p className="text-xs text-muted-foreground">
+          The contest link: /contests/<span className="font-mono">{"{slug}"}</span>. Leave blank to auto-generate from the
+          name. Changing it will break any previously shared links.
+        </p>
+        <Input
+          id="slug"
+          name="slug"
+          placeholder="e.g. crazii-cup-sg"
+          defaultValue={contest?.slug ?? ""}
+        />
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="startingBalance">Starting balance ($)</Label>

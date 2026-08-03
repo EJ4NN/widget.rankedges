@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { brokerServer, contest, participant, batch, setting } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
 import { isAimsRankingConfigured, fetchContestantMetrics, type AimsMetrics } from "@/lib/aimsranking"
@@ -99,7 +99,8 @@ export async function createContest(formData: FormData) {
     return { ok: false as const, error: "Name, start date and end date are required" }
   }
 
-  let slug = slugify(name)
+  const slugInput = String(formData.get("slug") || "").trim()
+  let slug = slugify(slugInput || name) || slugify(name)
   const existing = await db.select({ id: contest.id }).from(contest).where(eq(contest.slug, slug)).limit(1)
   if (existing.length) slug = `${slug}-${Date.now().toString(36)}`
 
@@ -136,6 +137,7 @@ export async function updateContest(id: number, formData: FormData) {
   const startDate = String(formData.get("startDate") || "")
   const endDate = String(formData.get("endDate") || "")
   const timeZone = String(formData.get("timeZone") || "").trim()
+  const slugInput = String(formData.get("slug") || "").trim()
   const maxParticipants = String(formData.get("maxParticipants") || "")
   const posterUrl = String(formData.get("posterUrl") || "").trim()
   const thumbnailUrl = String(formData.get("thumbnailUrl") || "").trim()
@@ -147,9 +149,23 @@ export async function updateContest(id: number, formData: FormData) {
     return { ok: false as const, error: "Name, start date and end date are required" }
   }
 
+  // Slug: use the admin-provided value (or fall back to the name), normalized.
+  // Ensure it stays unique across other contests.
+  let slug = slugify(slugInput || name)
+  if (!slug) slug = slugify(name)
+  const slugClash = await db
+    .select({ id: contest.id })
+    .from(contest)
+    .where(and(eq(contest.slug, slug), ne(contest.id, id)))
+    .limit(1)
+  if (slugClash.length) {
+    return { ok: false as const, error: `The URL slug "${slug}" is already used by another contest.` }
+  }
+
   await db
     .update(contest)
     .set({
+      slug,
       name,
       description: description || null,
       rules: rules || null,
