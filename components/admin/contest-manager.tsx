@@ -24,7 +24,7 @@ import {
 import { createContest, deleteContest, updateContest, updateContestStatus } from "@/app/actions/admin"
 import { ImageUploadField } from "@/components/admin/image-upload-field"
 import type { Contest } from "@/lib/db/schema"
-import { formatDate, toDateTimeLocal } from "@/lib/format"
+import { formatDate, toDateTimeLocal, fromDateTimeLocal } from "@/lib/format"
 import { toast } from "sonner"
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react"
 
@@ -40,8 +40,20 @@ function ContestForm({
   brokers: string[]
 }) {
   const allowed = contest?.allowedBrokers ?? []
+
+  // datetime-local values are wall-clock times in the admin's browser timezone.
+  // Convert them to UTC ISO here (client-side) before the server action parses
+  // them, otherwise the server misreads them as UTC and shifts the times.
+  async function handleAction(formData: FormData) {
+    for (const field of ["startDate", "endDate"] as const) {
+      const raw = String(formData.get(field) || "")
+      if (raw) formData.set(field, fromDateTimeLocal(raw))
+    }
+    await onSubmit(formData)
+  }
+
   return (
-    <form action={onSubmit} className="flex flex-col gap-4">
+    <form action={handleAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" placeholder="e.g. Asia Cup 2026" defaultValue={contest?.name} required />
