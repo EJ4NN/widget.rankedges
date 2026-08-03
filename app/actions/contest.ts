@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"
 import { contest, participant, brokerServer, batch } from "@/lib/db/schema"
-import { and, asc, desc, eq, sql } from "drizzle-orm"
+import { and, asc, eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
 import { withEffectiveStatus, effectiveContestStatus } from "@/lib/contest-status"
@@ -103,14 +103,17 @@ export async function getLeaderboard(
     .from(participant)
     .where(and(...filters))
     // Rank traders with real results above empty accounts, then by the winning
-    // metric. "Real results" is broader than closed trades: a trader can have a
-    // gain from open/floating positions with zero CLOSED trades (e.g. Janet),
-    // so gating on `trades > 0` alone wrongly buried profitable traders below
-    // losing ones. Count any of: closed trades, a non-zero gain, or non-zero
-    // equity. Only truly-empty accounts (no equity, no gain, no trades) sink.
+    // metric. "Real results" is broader than closed trades: a trader can be
+    // active from open/floating positions with zero CLOSED trades (e.g. Janet),
+    // so gating on `trades > 0` alone wrongly buried active traders below
+    // losing ones. Count any of: closed trades, a non-zero value on the SAME
+    // metric we rank by (so a rankEdgesGain/absoluteGain/lots contest gates on
+    // that metric, not on the broker `gain`), or non-zero equity. Only
+    // truly-empty accounts sink. NULLS LAST keeps any null metric at the bottom
+    // instead of Postgres' default NULLS FIRST for DESC.
     .orderBy(
-      sql`(${participant.trades} > 0 OR ${participant.gain} <> 0 OR COALESCE(${participant.currentEquity}, 0) <> 0) DESC`,
-      desc(rankColumn),
+      sql`(${participant.trades} > 0 OR COALESCE(${rankColumn}, 0) <> 0 OR COALESCE(${participant.currentEquity}, 0) <> 0) DESC`,
+      sql`${rankColumn} DESC NULLS LAST`,
     )
 
   // Strip private fields unless the admin opted to display them.
