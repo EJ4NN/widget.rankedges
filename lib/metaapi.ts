@@ -213,22 +213,35 @@ export async function getAccountMetrics(accountId: string): Promise<AccountMetri
 
   let res: Response | null = null
   for (const host of METASTATS_HOSTS) {
+    // MetaStats long-polls while an account is still synchronizing and can hang
+    // ~30s before answering 202. Cap each request so a not-yet-connected account
+    // can't stall the whole sync (which risks the server-action timeout).
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 12000)
     try {
       const r = await fetch(
         `${host}/users/current/accounts/${accountId}/metrics?includeOpenPositions=true`,
         {
           headers: { "auth-token": TOKEN, Accept: "application/json" },
           cache: "no-store",
+          signal: controller.signal,
         },
       )
-      if (r.ok) {
+      // 202 => account not fully connected/synchronized yet; metrics aren't
+      // ready. Don't treat it as success (that would store zeros) — leave the
+      // participant as "still connecting" so a later sync picks up real data.
+      if (r.status === 202) continue
+      if (r.status === 200) {
         res = r
         break
       }
       // 4xx (e.g. account not found) won't be fixed by another host — stop early.
       if (r.status >= 400 && r.status < 500) return null
     } catch (e) {
-      console.log(`[v0] metastats host failed (${host}):`, (e as Error).message)
+      const msg = (e as Error).name === "AbortError" ? "timed out (account still connecting)" : (e as Error).message
+      console.log(`[v0] metastats host failed (${host}):`, msg)
+    } finally {
+      clearTimeout(timer)
     }
   }
 
