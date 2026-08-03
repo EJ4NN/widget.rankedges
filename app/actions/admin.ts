@@ -654,6 +654,13 @@ async function syncViaAimsRanking(
       pending++
       continue
     }
+    if (!m.hasResult) {
+      // Registered in AIMS but results aren't live yet (balance/equity/gain are
+      // "-"). Writing them would produce a bogus -100% gain, so leave pending
+      // until AIMS posts real trading results.
+      pending++
+      continue
+    }
 
     // RankEdges gain: profit relative to total deposit only, ignoring
     // withdrawals. profit comes from the AIMS ProfitLoss field (fallback to
