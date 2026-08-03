@@ -102,9 +102,16 @@ export async function getLeaderboard(
     })
     .from(participant)
     .where(and(...filters))
-    // Rank traders with real activity (at least one trade) above inactive ones,
-    // then by the winning metric for this batch/contest.
-    .orderBy(sql`(${participant.trades} > 0) DESC`, desc(rankColumn))
+    // Rank traders with real results above empty accounts, then by the winning
+    // metric. "Real results" is broader than closed trades: a trader can have a
+    // gain from open/floating positions with zero CLOSED trades (e.g. Janet),
+    // so gating on `trades > 0` alone wrongly buried profitable traders below
+    // losing ones. Count any of: closed trades, a non-zero gain, or non-zero
+    // equity. Only truly-empty accounts (no equity, no gain, no trades) sink.
+    .orderBy(
+      sql`(${participant.trades} > 0 OR ${participant.gain} <> 0 OR COALESCE(${participant.currentEquity}, 0) <> 0) DESC`,
+      desc(rankColumn),
+    )
 
   // Strip private fields unless the admin opted to display them.
   return rows.map((r) => ({
