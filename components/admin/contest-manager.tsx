@@ -230,6 +230,20 @@ function ContestForm({
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="faq">FAQ</Label>
+        <textarea
+          id="faq"
+          name="faq"
+          rows={6}
+          placeholder={"Q: How do I join?\nA: Click Join Contest and enter your MT4 ID.\nQ: When does it start?\nA: 17 August 2026."}
+          defaultValue={contest?.faq ?? ""}
+          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        <p className="text-xs text-muted-foreground">
+          Use alternating {'"Q:"'} and {'"A:"'} lines. The FAQ tab only appears when this is filled in.
+        </p>
+      </div>
       <Button type="submit">{submitLabel}</Button>
     </form>
   )

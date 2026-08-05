@@ -87,6 +87,9 @@ export const contest = pgTable("contest", {
   name: text("name").notNull(),
   description: text("description"),
   rules: text("rules"),
+  // Frequently asked questions, stored as alternating "Q:"/"A:" line pairs
+  // (same free-text approach as `rules`). Parsed into an accordion for display.
+  faq: text("faq"),
   prizePool: text("prizePool"),
   startingBalance: numeric("startingBalance", { precision: 18, scale: 2 })
     .default("10000")
