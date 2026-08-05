@@ -94,6 +94,7 @@ export async function createContest(formData: FormData) {
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
   const dataSource = normalizeDataSource(formData.get("dataSource"))
+  const requireEmail = formData.get("requireEmail") != null
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -120,6 +121,7 @@ export async function createContest(formData: FormData) {
     sponsorLogoUrl: sponsorLogoUrl || null,
     allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
     dataSource,
+    requireEmail,
     status: "upcoming",
   })
 
@@ -144,6 +146,7 @@ export async function updateContest(id: number, formData: FormData) {
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
   const dataSource = normalizeDataSource(formData.get("dataSource"))
+  const requireEmail = formData.get("requireEmail") != null
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -180,6 +183,7 @@ export async function updateContest(id: number, formData: FormData) {
       sponsorLogoUrl: sponsorLogoUrl || null,
       allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
       dataSource,
+      requireEmail,
     })
     .where(eq(contest.id, id))
 

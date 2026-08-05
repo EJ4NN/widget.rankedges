@@ -147,6 +147,27 @@ function ContestForm({
         </select>
       </div>
       <div className="flex flex-col gap-2">
+        <Label htmlFor="requireEmail">Registration</Label>
+        <label
+          htmlFor="requireEmail"
+          className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-secondary/50 px-3 py-3"
+        >
+          <input
+            id="requireEmail"
+            type="checkbox"
+            name="requireEmail"
+            defaultChecked={contest?.requireEmail ?? false}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-foreground">Require email to join</span>
+            <span className="text-xs text-muted-foreground">
+              Entrants must provide a valid email address on the join form.
+            </span>
+          </span>
+        </label>
+      </div>
+      <div className="flex flex-col gap-2">
         <Label>Eligible brokers</Label>
         <p className="text-xs text-muted-foreground">
           Tick which brokers can join. Leave all unticked to allow every broker.

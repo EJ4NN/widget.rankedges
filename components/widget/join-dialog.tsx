@@ -30,11 +30,13 @@ export function JoinDialog({
   contestId,
   contestSlug,
   dataSource,
+  requireEmail = false,
   disabled,
 }: {
   contestId: number
   contestSlug: string
   dataSource: string
+  requireEmail?: boolean
   disabled?: boolean
 }) {
   const router = useRouter()
@@ -83,19 +85,28 @@ export function JoinDialog({
   function goToStep2(e: React.FormEvent) {
     e.preventDefault()
     if (!nickname.trim() || !realName.trim()) return
+    if (requireEmail && !email.trim()) {
+      toast.error("Email is required to join this contest")
+      return
+    }
     setStep(2)
   }
 
-  // AIMS Ranking: one-step form — nickname + MT4 login only.
+  // AIMS Ranking: one-step form — nickname + MT4 login (+ email when required).
   async function handleAimsSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!nickname.trim() || !accountLogin.trim()) return
+    if (requireEmail && !email.trim()) {
+      toast.error("Email is required to join this contest")
+      return
+    }
     setLoading(true)
     const res = await joinContest({
       contestId,
       contestSlug,
       nickname: nickname.trim(),
       accountLogin: accountLogin.trim(),
+      email: email.trim() || undefined,
     })
     setLoading(false)
     if (!res.ok) {
@@ -203,6 +214,22 @@ export function JoinDialog({
                 </p>
               </div>
 
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="aims-email">Email{requireEmail ? "" : " (optional)"}</Label>
+                <Input
+                  id="aims-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required={requireEmail}
+                  className="h-12"
+                />
+                <p className="text-xs text-muted-foreground">
+                  We&apos;ll use this to contact you about the contest. It is never shown publicly.
+                </p>
+              </div>
+
               <Button
                 type="submit"
                 size="lg"
@@ -260,13 +287,14 @@ export function JoinDialog({
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email (optional)</Label>
+                  <Label htmlFor="email">Email{requireEmail ? "" : " (optional)"}</Label>
                   <Input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
+                    required={requireEmail}
                     className="h-12"
                   />
                 </div>

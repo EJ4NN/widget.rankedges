@@ -164,6 +164,15 @@ export async function joinContest(input: JoinInput) {
     return { ok: false as const, error: "Please complete all account details" }
   }
 
+  // Email is required only when the contest opts in. Validate format when given.
+  const emailInput = input.email?.trim() || ""
+  if (c.requireEmail && !emailInput) {
+    return { ok: false as const, error: "Email is required to join this contest" }
+  }
+  if (emailInput && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)) {
+    return { ok: false as const, error: "Please enter a valid email address" }
+  }
+
   // capacity check
   if (c.maxParticipants) {
     const count = await getParticipantCount(input.contestId)
@@ -189,7 +198,7 @@ export async function joinContest(input: JoinInput) {
       contestId: input.contestId,
       nickname: input.nickname.trim(),
       realName: input.nickname.trim(), // no separate real name collected
-      email: input.email?.trim() || null,
+      email: emailInput || null,
       platform: "mt4",
       serverId: null,
       serverName: null,
@@ -237,7 +246,7 @@ export async function joinContest(input: JoinInput) {
     contestId: input.contestId,
     nickname: input.nickname.trim(),
     realName: input.realName!.trim(),
-    email: input.email?.trim() || null,
+    email: emailInput || null,
     platform: input.platform!,
     serverId: server.id,
     serverName: server.name,
