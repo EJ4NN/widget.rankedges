@@ -101,6 +101,7 @@ export function ContestHero({
           contestId={contest.id}
           contestSlug={contest.slug}
           dataSource={contest.dataSource}
+          requireEmail={contest.requireEmail}
           disabled={isEnded}
         />
         {isEnded ? (
