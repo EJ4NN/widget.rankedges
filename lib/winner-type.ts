@@ -5,7 +5,7 @@ export type WinnerType = (typeof WINNER_TYPES)[number]
 export const WINNER_TYPE_LABELS: Record<WinnerType, string> = {
   gain: "Gain %",
   absoluteGain: "Absolute Gain %",
-  rankEdgesGain: "RankEdges Gain %",
+  rankEdgesGain: "REG (RankEdges Gain) %",
   lots: "Total Lots",
 }
 
@@ -13,7 +13,7 @@ export const WINNER_TYPE_LABELS: Record<WinnerType, string> = {
 export const WINNER_TYPE_SHORT: Record<WinnerType, string> = {
   gain: "Gain",
   absoluteGain: "Abs. Gain",
-  rankEdgesGain: "RankEdges",
+  rankEdgesGain: "REG",
   lots: "Lots",
 }
 
