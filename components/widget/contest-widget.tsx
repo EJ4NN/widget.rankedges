@@ -5,6 +5,7 @@ import { Leaderboard } from "@/components/widget/leaderboard"
 import { BatchedLeaderboard, type BatchBlock } from "@/components/widget/batched-leaderboard"
 import { BrandLogo, PoweredBy } from "@/components/widget/brand"
 import { RulesContent } from "@/components/widget/rules-content"
+import { FaqContent } from "@/components/widget/faq-content"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { resolveColumns } from "@/lib/leaderboard-columns"
 import { normalizeWinnerType } from "@/lib/winner-type"
@@ -71,6 +72,7 @@ export async function ContestWidget({ slug }: { slug: string }) {
         <TabsList>
           <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
+          {contest.faq ? <TabsTrigger value="faq">FAQ</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="leaderboard" className="mt-4">
@@ -90,6 +92,14 @@ export async function ContestWidget({ slug }: { slug: string }) {
             )}
           </div>
         </TabsContent>
+
+        {contest.faq ? (
+          <TabsContent value="faq" className="mt-4">
+            <div className="glass rounded-xl p-6">
+              <FaqContent faq={contest.faq} />
+            </div>
+          </TabsContent>
+        ) : null}
       </Tabs>
 
       <footer className="flex flex-col items-center gap-2 border-t border-border/60 pt-5">

@@ -83,6 +83,7 @@ export async function createContest(formData: FormData) {
   const name = String(formData.get("name") || "").trim()
   const description = String(formData.get("description") || "").trim()
   const rules = String(formData.get("rules") || "").trim()
+  const faq = String(formData.get("faq") || "").trim()
   const prizePool = String(formData.get("prizePool") || "").trim()
   const startingBalance = String(formData.get("startingBalance") || "10000")
   const startDate = String(formData.get("startDate") || "")
@@ -110,6 +111,7 @@ export async function createContest(formData: FormData) {
     name,
     description: description || null,
     rules: rules || null,
+    faq: faq || null,
     prizePool: prizePool || null,
     startingBalance,
     startDate: new Date(startDate),
@@ -134,6 +136,7 @@ export async function updateContest(id: number, formData: FormData) {
   const name = String(formData.get("name") || "").trim()
   const description = String(formData.get("description") || "").trim()
   const rules = String(formData.get("rules") || "").trim()
+  const faq = String(formData.get("faq") || "").trim()
   const prizePool = String(formData.get("prizePool") || "").trim()
   const startingBalance = String(formData.get("startingBalance") || "10000")
   const startDate = String(formData.get("startDate") || "")
@@ -172,6 +175,7 @@ export async function updateContest(id: number, formData: FormData) {
       name,
       description: description || null,
       rules: rules || null,
+    faq: faq || null,
       prizePool: prizePool || null,
       startingBalance,
       startDate: new Date(startDate),
