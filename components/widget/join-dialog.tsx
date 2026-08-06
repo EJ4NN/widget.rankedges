@@ -92,31 +92,6 @@ export function JoinDialog({
     setStep(2)
   }
 
-  // AIMS Ranking: one-step form — nickname + MT4 login (+ email when required).
-  async function handleAimsSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!nickname.trim() || !accountLogin.trim()) return
-    if (requireEmail && !email.trim()) {
-      toast.error("Email is required to join this contest")
-      return
-    }
-    setLoading(true)
-    const res = await joinContest({
-      contestId,
-      contestSlug,
-      nickname: nickname.trim(),
-      accountLogin: accountLogin.trim(),
-      email: email.trim() || undefined,
-    })
-    setLoading(false)
-    if (!res.ok) {
-      toast.error(res.error)
-      return
-    }
-    setDone(true)
-    router.refresh()
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!platform || !serverId || !accountLogin.trim() || !investorPassword.trim()) return
@@ -169,79 +144,8 @@ export function JoinDialog({
               Done
             </Button>
           </div>
-        ) : isAims ? (
-          /* ---------- AIMS Ranking: single-step form ---------- */
-          <>
-            <DialogHeader>
-              <DialogTitle>Enter the contest</DialogTitle>
-              <DialogDescription>
-                Pick a public nickname and enter your MT4 login. That&apos;s all we need — your
-                results are tracked automatically.
-              </DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleAimsSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="nickname">Nickname (public)</Label>
-                <Input
-                  id="nickname"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="e.g. PipHunter"
-                  required
-                  maxLength={30}
-                  className="h-12"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This is the only thing shown publicly on the leaderboard.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="login">MT4 login</Label>
-                <Input
-                  id="login"
-                  inputMode="numeric"
-                  value={accountLogin}
-                  onChange={(e) => setAccountLogin(e.target.value)}
-                  placeholder="e.g. 5012345"
-                  required
-                  className="h-12"
-                />
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <ShieldCheck className="h-3 w-3 shrink-0 text-primary" aria-hidden />
-                  Make sure this matches the MT4 ID registered for the contest.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="aims-email">Email{requireEmail ? "" : " (optional)"}</Label>
-                <Input
-                  id="aims-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required={requireEmail}
-                  className="h-12"
-                />
-                <p className="text-xs text-muted-foreground">
-                  We&apos;ll use this to contact you about the contest. It is never shown publicly.
-                </p>
-              </div>
-
-              <Button
-                type="submit"
-                size="lg"
-                className="mt-1 h-12 w-full text-base font-semibold"
-                disabled={loading}
-              >
-                {loading ? "Submitting..." : "Join Contest"}
-              </Button>
-            </form>
-          </>
         ) : (
-          /* ---------- MetaAPI: two-step account connection ---------- */
+          /* ---------- Full two-step account connection (all data sources) ---------- */
           <>
             <DialogHeader>
               <DialogTitle>{step === 1 ? "Enter the contest" : "Connect your account"}</DialogTitle>

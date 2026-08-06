@@ -137,9 +137,8 @@ type JoinInput = {
   contestSlug: string
   nickname: string
   accountLogin: string
-  // The fields below are only required for MetaAPI contests. AIMS Ranking
-  // contests pull results from the CRM feed matched by MT4 ID, so the trader
-  // only supplies a nickname + MT4 login.
+  // All contests collect these now. For AIMS Ranking they're stored but results
+  // are still read from the CRM feed by MT4 ID (no MetaAPI provisioning).
   realName?: string
   email?: string
   platform?: "mt4" | "mt5"
@@ -156,11 +155,18 @@ export async function joinContest(input: JoinInput) {
 
   const isAims = c.dataSource === "aimsranking"
 
-  // Basic required fields per data source.
-  if (!input.nickname.trim() || !input.accountLogin.trim()) {
-    return { ok: false as const, error: "Nickname and MT4 login are required" }
-  }
-  if (!isAims && (!input.realName?.trim() || !input.platform || !input.serverId || !input.investorPassword?.trim())) {
+  // All contests now collect the full account details (nickname, real name,
+  // platform, broker server, account login, investor password). For AIMS
+  // Ranking the credentials are stored but results are still read from the CRM
+  // feed by MT4 ID — we do NOT provision a MetaAPI account.
+  if (
+    !input.nickname.trim() ||
+    !input.accountLogin.trim() ||
+    !input.realName?.trim() ||
+    !input.platform ||
+    !input.serverId ||
+    !input.investorPassword?.trim()
+  ) {
     return { ok: false as const, error: "Please complete all account details" }
   }
 
@@ -191,19 +197,30 @@ export async function joinContest(input: JoinInput) {
     return { ok: false as const, error: "This trading account is already registered" }
   }
 
-  // AIMS Ranking: register with just nickname + MT4 login. No server, no
-  // provisioning, no investor password — the results are read from the CRM feed.
+  // Resolve the selected broker server (both data sources collect it now).
+  const server = (await db.select().from(brokerServer).where(eq(brokerServer.id, input.serverId!)).limit(1))[0]
+  if (!server) return { ok: false as const, error: "Invalid server selected" }
+
+  // Enforce broker allow-list when the contest restricts brokers.
+  if (c.allowedBrokers && c.allowedBrokers.length > 0) {
+    if (!server.company || !c.allowedBrokers.includes(server.company)) {
+      return { ok: false as const, error: "This broker is not eligible for this contest" }
+    }
+  }
+
+  // AIMS Ranking: store the full account details, but do NOT provision a
+  // MetaAPI account — results are read from the CRM feed matched by MT4 ID.
   if (isAims) {
     await db.insert(participant).values({
       contestId: input.contestId,
       nickname: input.nickname.trim(),
-      realName: input.nickname.trim(), // no separate real name collected
+      realName: input.realName!.trim(),
       email: emailInput || null,
-      platform: "mt4",
-      serverId: null,
-      serverName: null,
+      platform: input.platform!,
+      serverId: server.id,
+      serverName: server.name,
       accountLogin: input.accountLogin.trim(),
-      investorPassword: "",
+      investorPassword: input.investorPassword!,
       metaApiAccountId: null,
       status: "pending",
       startingBalance: c.startingBalance,
@@ -215,16 +232,6 @@ export async function joinContest(input: JoinInput) {
   }
 
   // MetaAPI flow — full account connection.
-  const server = (await db.select().from(brokerServer).where(eq(brokerServer.id, input.serverId!)).limit(1))[0]
-  if (!server) return { ok: false as const, error: "Invalid server selected" }
-
-  // Enforce broker allow-list when the contest restricts brokers.
-  if (c.allowedBrokers && c.allowedBrokers.length > 0) {
-    if (!server.company || !c.allowedBrokers.includes(server.company)) {
-      return { ok: false as const, error: "This broker is not eligible for this contest" }
-    }
-  }
-
   // Try to provision on MetaAPI (best-effort). If it fails, we still register
   // the participant as pending so an admin can retry the sync.
   let metaApiAccountId: string | null = null
