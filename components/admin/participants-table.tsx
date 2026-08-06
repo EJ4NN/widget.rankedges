@@ -259,7 +259,7 @@ export function ParticipantsTable({
                 <TableHead>Source</TableHead>
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
-                <TableHead className="text-right">{isAims ? "RankEdges Gain" : "Gain"}</TableHead>
+                <TableHead className="text-right">{isAims ? "REG (RankEdges Gain)" : "Gain"}</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>

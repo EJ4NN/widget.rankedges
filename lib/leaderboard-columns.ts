@@ -44,7 +44,7 @@ export type NumericColumnKey = (typeof NUMERIC_COLUMN_KEYS)[number]
 export const COLUMN_LABELS: Record<keyof LeaderboardColumns, string> = {
   gain: "Gain",
   absoluteGain: "Abs. Gain",
-  rankEdgesGain: "RankEdges Gain",
+  rankEdgesGain: "REG (RankEdges Gain)",
   lots: "Lots",
   equity: "Equity",
   deposits: "Deposits",
