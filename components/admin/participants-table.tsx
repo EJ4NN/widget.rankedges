@@ -24,7 +24,9 @@ import {
   syncContest,
   setParticipantBatch,
   setParticipantDataSource,
+  setDisplaySource,
 } from "@/app/actions/admin"
+import type { SourceKey } from "@/lib/db/schema"
 import { formatLots, formatMoney, formatPct, formatPctPlain, formatDateTime } from "@/lib/format"
 import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
@@ -44,6 +46,7 @@ export function ParticipantsTable({
   contestId,
   contestSlug,
   dataSource,
+  displaySource,
   participants,
   metaApiConfigured,
   servers,
@@ -52,16 +55,25 @@ export function ParticipantsTable({
   contestId: number
   contestSlug: string
   dataSource: string
+  displaySource: string
   participants: Participant[]
   metaApiConfigured: boolean
   servers: Server[]
   batches: BatchOption[]
 }) {
-  const isAims = dataSource === "aimsranking"
-  // AIMS contests sync via the AIMS Ranking API (no MetaAPI needed), so syncing
-  // is always available for them; MetaAPI contests require the token.
-  const canSync = isAims || metaApiConfigured
+  const contestIsAims = dataSource === "aimsranking"
   const router = useRouter()
+  // Which source is currently shown (leaderboard + this table). Toggling it
+  // re-projects stored snapshots server-side — instant, no API call.
+  const [displayState, setDisplayState] = useState<SourceKey>(
+    (displaySource as SourceKey) ?? (contestIsAims ? "aimsranking" : "metaapi"),
+  )
+  const displayIsAims = displayState === "aimsranking"
+  // Which source THIS sync run pulls from. "auto" = per-participant routing.
+  const [syncSource, setSyncSource] = useState<"auto" | SourceKey>("auto")
+  // Syncing is always available for AIMS (no token needed); MetaAPI needs one.
+  // With the source selector, allow syncing whenever either path is usable.
+  const canSync = contestIsAims || metaApiConfigured
   const [reveal, setReveal] = useState<Record<number, boolean>>({})
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [pending, startTransition] = useTransition()
@@ -96,8 +108,11 @@ export function ParticipantsTable({
       if (syncingRef.current) return
       syncingRef.current = true
       setSyncing(true)
+      // Did this run pull from the AIMS feed? True when explicitly chosen, or
+      // when "auto" resolves to AIMS for an AIMS contest. Drives the messaging.
+      const usedAims = syncSource === "aimsranking" || (syncSource === "auto" && contestIsAims)
       try {
-        const res = await syncContest(contestId, ids)
+        const res = await syncContest(contestId, ids, syncSource === "auto" ? undefined : syncSource)
         if (!res.ok) {
           if (!silent) toast.error(res.error ?? "Sync failed")
           return
@@ -113,7 +128,7 @@ export function ParticipantsTable({
               description: res.warning,
               duration: 8000,
             })
-          } else if (isAims && res.synced === 0 && res.pending) {
+          } else if (usedAims && res.synced === 0 && res.pending) {
             // Nothing matched the AIMS feed — most often the MT4 IDs uploaded to
             // the CRM don't match the ones traders joined with.
             toast.warning("No accounts matched the AIMS feed", {
@@ -122,7 +137,7 @@ export function ParticipantsTable({
             })
           } else if (res.pending) {
             toast.success(`Synced ${res.synced} account(s)`, {
-              description: isAims
+              description: usedAims
                 ? `${res.pending} not in the AIMS feed yet.`
                 : `${res.pending} still connecting — will retry.`,
             })
@@ -135,7 +150,25 @@ export function ParticipantsTable({
         setSyncing(false)
       }
     },
-    [contestId, router, isAims],
+    [contestId, router, syncSource, contestIsAims],
+  )
+
+  // Flip the displayed source. Server re-projects stored snapshots instantly.
+  const changeDisplaySource = useCallback(
+    async (src: SourceKey) => {
+      if (src === displayState) return
+      const prev = displayState
+      setDisplayState(src)
+      const res = await setDisplaySource(contestId, src)
+      if (!res.ok) {
+        setDisplayState(prev)
+        toast.error(res.error ?? "Could not switch source")
+        return
+      }
+      router.refresh()
+      toast.success(`Now showing ${src === "aimsranking" ? "AIMS Ranking" : "MetaAPI"} data`)
+    },
+    [contestId, displayState, router],
   )
 
   // Auto-sync on an interval while enabled. Runs one sync immediately on toggle-on.
@@ -171,7 +204,49 @@ export function ParticipantsTable({
             hasBatches={batches.length > 0}
             contestDataSource={dataSource}
           />
-          {isAims && (
+          {/* Display source toggle — flips the shown data instantly (no API). */}
+          <div className="inline-flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Show</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-border">
+              <button
+                type="button"
+                onClick={() => void changeDisplaySource("aimsranking")}
+                aria-pressed={displayIsAims}
+                className={
+                  "px-2.5 py-1 text-xs font-medium transition-colors " +
+                  (displayIsAims ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary")
+                }
+              >
+                AIMS
+              </button>
+              <button
+                type="button"
+                onClick={() => void changeDisplaySource("metaapi")}
+                aria-pressed={!displayIsAims}
+                className={
+                  "px-2.5 py-1 text-xs font-medium transition-colors " +
+                  (!displayIsAims ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-secondary")
+                }
+              >
+                MetaAPI
+              </button>
+            </div>
+          </div>
+          {/* Which source the next Sync pulls from. */}
+          <div className="inline-flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Sync from</span>
+            <Select value={syncSource} onValueChange={(v) => setSyncSource(v as "auto" | SourceKey)}>
+              <SelectTrigger className="h-8 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="aimsranking">AIMS Ranking</SelectItem>
+                <SelectItem value="metaapi">MetaAPI</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {contestIsAims && (
             <Button
               size="sm"
               variant="secondary"
@@ -222,7 +297,7 @@ export function ParticipantsTable({
         </p>
       )}
 
-      {isAims ? (
+      {contestIsAims ? (
         <p className="border-b border-border bg-primary/5 px-5 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-primary">AIMS Ranking source</span> — download the contestant
           sheet, upload it to admin.aimsrankedge.com, then sync to pull results (matched by MT4 ID).
@@ -259,7 +334,7 @@ export function ParticipantsTable({
                 <TableHead>Source</TableHead>
                 <TableHead>Investor pwd</TableHead>
                 <TableHead className="text-right">Equity</TableHead>
-                <TableHead className="text-right">{isAims ? "REG (RankEdges Gain)" : "Gain"}</TableHead>
+                <TableHead className="text-right">{displayIsAims ? "REG (RankEdges Gain)" : "Gain"}</TableHead>
                 <TableHead className="text-right">Lots</TableHead>
                 <TableHead className="text-right">Drawdown</TableHead>
                 <TableHead className="text-right">Depo / WD</TableHead>
@@ -271,7 +346,7 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                const pct = Number((isAims ? p.rankEdgesGain : p.gain) ?? 0)
+                const pct = Number((displayIsAims ? p.rankEdgesGain : p.gain) ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>
@@ -328,7 +403,7 @@ export function ParticipantsTable({
                       {p.serverName ? (
                         <div className="text-muted-foreground">{p.serverName}</div>
                       ) : null}
-                      {isAims ? (
+                      {contestIsAims ? (
                         p.lastSyncedAt ? (
                           <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-sans text-[10px] font-medium text-primary">
                             <CheckCircle2 className="h-3 w-3" />

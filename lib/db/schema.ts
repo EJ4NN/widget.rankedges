@@ -10,6 +10,34 @@ import {
 } from "drizzle-orm/pg-core"
 import type { LeaderboardColumns } from "@/lib/leaderboard-columns"
 
+/* --------------------------- Metric snapshots --------------------------- */
+
+// The two live-data providers a participant's metrics can come from.
+export type SourceKey = "aimsranking" | "metaapi"
+
+// A full set of metrics captured from ONE source at sync time. We keep one of
+// these per source on each participant so the admin can flip the displayed
+// source instantly (we just re-project the chosen snapshot into the flat metric
+// columns the leaderboard reads) without re-hitting any API.
+export type MetricSnapshot = {
+  currentBalance: number
+  currentEquity: number
+  profit: number
+  profitPct: number
+  gain: number
+  absoluteGain: number
+  rankEdgesGain: number
+  lots: number
+  maxDrawdown: number
+  deposits: number
+  withdrawals: number
+  trades: number | null
+  winRate: number
+  syncedAt: string // ISO timestamp of when this source was last synced
+}
+
+export type SourceSnapshots = Partial<Record<SourceKey, MetricSnapshot>>
+
 /* ----------------------------- Better Auth ----------------------------- */
 
 export const user = pgTable("user", {
@@ -104,6 +132,10 @@ export const contest = pgTable("contest", {
   // Where live metrics are pulled from: "metaapi" (per-account provisioning) or
   // "aimsranking" (bulk contestant records from the AIMSCAP Ranking API).
   dataSource: text("dataSource").default("metaapi").notNull(),
+  // Which stored source snapshot is shown on the leaderboard / admin table.
+  // "aimsranking" | "metaapi". When null, falls back to `dataSource`. Toggling
+  // this only re-projects existing snapshots — it never calls an external API.
+  displaySource: text("displaySource"),
   // When true, entrants must provide an email address to join this contest.
   requireEmail: boolean("requireEmail").default(false).notNull(),
   maxParticipants: integer("maxParticipants"),
@@ -169,6 +201,10 @@ export const participant = pgTable("participant", {
   withdrawals: numeric("withdrawals", { precision: 18, scale: 2 }).default("0"),
   trades: integer("trades").default(0),
   winRate: numeric("winRate", { precision: 10, scale: 4 }).default("0"),
+  // Per-source metric snapshots (aimsranking + metaapi). The flat metric columns
+  // above always mirror the contest's displaySource snapshot; this holds ALL
+  // sources so the admin can toggle the display instantly.
+  sourceSnapshots: jsonb("sourceSnapshots").$type<SourceSnapshots>(),
   // Auto-generated trader avatar/logo (deterministic per nickname; admin can override)
   avatarUrl: text("avatarUrl"),
   lastSyncedAt: timestamp("lastSyncedAt"),

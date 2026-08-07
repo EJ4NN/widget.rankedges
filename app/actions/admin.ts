@@ -1,7 +1,15 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { brokerServer, contest, participant, batch, setting } from "@/lib/db/schema"
+import {
+  brokerServer,
+  contest,
+  participant,
+  batch,
+  setting,
+  type MetricSnapshot,
+  type SourceKey,
+} from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
 import { and, asc, desc, eq, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -458,11 +466,69 @@ export async function deleteParticipant(id: number) {
   revalidatePath("/admin")
 }
 
+/** Flatten a stored snapshot into the numeric metric columns the app reads. */
+function snapshotToColumns(s: MetricSnapshot) {
+  return {
+    currentBalance: String(s.currentBalance),
+    currentEquity: String(s.currentEquity),
+    profit: String(s.profit),
+    profitPct: String(s.profitPct),
+    gain: String(s.gain),
+    absoluteGain: String(s.absoluteGain),
+    rankEdgesGain: String(s.rankEdgesGain),
+    lots: String(s.lots),
+    maxDrawdown: String(s.maxDrawdown),
+    deposits: String(s.deposits),
+    withdrawals: String(s.withdrawals),
+    trades: s.trades,
+    winRate: String(s.winRate),
+    lastSyncedAt: s.syncedAt ? new Date(s.syncedAt) : null,
+  }
+}
+
+/** Merge a freshly-synced snapshot into a participant's stored source snapshots. */
+function mergeSnapshot(
+  existing: typeof participant.$inferSelect.sourceSnapshots,
+  source: SourceKey,
+  snap: MetricSnapshot,
+) {
+  return { ...(existing ?? {}), [source]: snap }
+}
+
+/**
+ * Re-project the contest's display source into every participant's flat metric
+ * columns from their stored snapshots. Pure DB work — no external API calls —
+ * so toggling the displayed source is instant. Participants without a snapshot
+ * for the chosen source are left untouched.
+ */
+async function projectDisplaySource(
+  contestId: number,
+  c: typeof contest.$inferSelect,
+  onlyIds?: Set<number>,
+) {
+  const src = (c.displaySource ?? c.dataSource) as SourceKey
+  const rows = await db.select().from(participant).where(eq(participant.contestId, contestId))
+  for (const p of rows) {
+    if (onlyIds && !onlyIds.has(p.id)) continue
+    const snap = p.sourceSnapshots?.[src]
+    if (!snap) continue
+    await db.update(participant).set(snapshotToColumns(snap)).where(eq(participant.id, p.id))
+  }
+}
+
 /**
  * Pull live metrics from MetaAPI for every participant of a contest that has a
  * provisioned MetaAPI account, and recompute profit / profit %.
  */
-export async function syncContest(contestId: number, participantIds?: number[]) {
+export async function syncContest(
+  contestId: number,
+  participantIds?: number[],
+  // Force a specific source for THIS sync run. When omitted ("auto"), each row
+  // is pulled from its own effective data source (per-participant override, else
+  // the contest default). When set, every row is pulled from that one source so
+  // the admin can populate a second source's snapshot for comparison/toggling.
+  syncSource?: SourceKey,
+) {
   await requireAdmin()
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
@@ -473,11 +539,21 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
   const idSet = participantIds && participantIds.length > 0 ? new Set(participantIds) : null
   const rows = idSet ? allRows.filter((p) => idSet.has(p.id)) : allRows
 
-  // Each participant can override the contest's data source. Partition the rows
-  // so AIMS-sourced traders are matched against the AIMS feed while the rest go
-  // through MetaAPI provisioning — both in a single sync run.
-  const aimsRows = rows.filter((p) => (p.dataSource ?? c.dataSource) === "aimsranking")
-  const metaRows = rows.filter((p) => (p.dataSource ?? c.dataSource) !== "aimsranking")
+  // Partition the rows by which source to pull from. An explicit syncSource
+  // overrides the per-participant/contest routing; otherwise AIMS-sourced
+  // traders hit the AIMS feed and the rest go through MetaAPI — in one run.
+  let aimsRows: typeof rows
+  let metaRows: typeof rows
+  if (syncSource === "aimsranking") {
+    aimsRows = rows
+    metaRows = []
+  } else if (syncSource === "metaapi") {
+    aimsRows = []
+    metaRows = rows
+  } else {
+    aimsRows = rows.filter((p) => (p.dataSource ?? c.dataSource) === "aimsranking")
+    metaRows = rows.filter((p) => (p.dataSource ?? c.dataSource) !== "aimsranking")
+  }
 
   let synced = 0
   let pending = 0
@@ -502,16 +578,26 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
 
   // --- MetaAPI participants ---
   if (metaRows.length === 0) {
+    await projectDisplaySource(contestId, c, idSet ?? undefined)
     revalidatePath("/admin")
     revalidatePath(`/admin/contests/${contestId}`)
+    if (c.slug) {
+      revalidatePath(`/embed/${c.slug}`)
+      revalidatePath(`/contests/${c.slug}`)
+    }
     return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
   }
 
   if (!isMetaApiConfigured()) {
     // No MetaAPI token: if we already synced AIMS rows, report partial success.
     if (aimsRows.length > 0) {
+      await projectDisplaySource(contestId, c, idSet ?? undefined)
       revalidatePath("/admin")
       revalidatePath(`/admin/contests/${contestId}`)
+      if (c.slug) {
+        revalidatePath(`/embed/${c.slug}`)
+        revalidatePath(`/contests/${c.slug}`)
+      }
       return {
         ok: true as const,
         synced,
@@ -567,31 +653,41 @@ export async function syncContest(contestId: number, participantIds?: number[]) 
     const deposits = Number(metrics.deposits) || 0
     const rankEdgesGain = deposits > 0 ? (metrics.profit / deposits) * 100 : 0
 
+    const snap: MetricSnapshot = {
+      currentBalance: metrics.balance,
+      currentEquity: equity,
+      profit,
+      profitPct,
+      gain: metrics.gain,
+      absoluteGain: metrics.absoluteGain,
+      rankEdgesGain,
+      lots: metrics.lots,
+      maxDrawdown: metrics.maxDrawdown,
+      deposits: metrics.deposits,
+      withdrawals: metrics.withdrawals,
+      trades: metrics.trades,
+      winRate: metrics.winRate,
+      syncedAt: new Date().toISOString(),
+    }
+
     await db
       .update(participant)
       .set({
-        currentBalance: String(metrics.balance),
-        currentEquity: String(equity),
-        profit: String(profit),
-        profitPct: String(profitPct),
-        gain: String(metrics.gain),
-        absoluteGain: String(metrics.absoluteGain),
-        rankEdgesGain: String(rankEdgesGain),
-        lots: String(metrics.lots),
-        maxDrawdown: String(metrics.maxDrawdown),
-        deposits: String(metrics.deposits),
-        withdrawals: String(metrics.withdrawals),
-        trades: metrics.trades,
-        winRate: String(metrics.winRate),
+        sourceSnapshots: mergeSnapshot(p.sourceSnapshots, "metaapi", snap),
         status: p.status === "pending" ? "active" : p.status,
-        lastSyncedAt: new Date(),
       })
       .where(eq(participant.id, p.id))
     synced++
   }
 
+  // Mirror the display source's snapshot into the flat metric columns.
+  await projectDisplaySource(contestId, c, idSet ?? undefined)
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
+  if (c.slug) {
+    revalidatePath(`/embed/${c.slug}`)
+    revalidatePath(`/contests/${c.slug}`)
+  }
   return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
 }
 
@@ -676,25 +772,31 @@ async function syncViaAimsRanking(
     const profit = m.profit || m.equity - m.deposits
     const rankEdgesGain = m.deposits > 0 ? (profit / m.deposits) * 100 : 0
 
+    // RankEdges gain is our own metric (profit / deposit). `gain` keeps the raw
+    // figure AIMS reports; `absoluteGain` isn't provided by AIMS so it stays 0.
+    // AIMS doesn't expose closed-trade counts or win rate.
+    const snap: MetricSnapshot = {
+      currentBalance: m.balance,
+      currentEquity: m.equity,
+      profit,
+      profitPct: rankEdgesGain,
+      gain: m.gain,
+      absoluteGain: 0,
+      rankEdgesGain,
+      lots: m.lots,
+      maxDrawdown: m.drawdown,
+      deposits: m.deposits,
+      withdrawals: m.withdrawals,
+      trades: null,
+      winRate: 0,
+      syncedAt: new Date().toISOString(),
+    }
+
     await db
       .update(participant)
       .set({
-        currentBalance: String(m.balance),
-        currentEquity: String(m.equity),
-        profit: String(profit),
-        profitPct: String(rankEdgesGain),
-        // RankEdges gain is our own metric (profit / deposit) and lives in its
-        // own column. `gain` keeps the raw figure AIMS reports; `absoluteGain`
-        // isn't provided by AIMS so it stays 0. Admin picks the ranking metric.
-        rankEdgesGain: String(rankEdgesGain),
-        gain: String(m.gain),
-        absoluteGain: "0",
-        lots: String(m.lots),
-        maxDrawdown: String(m.drawdown),
-        deposits: String(m.deposits),
-        withdrawals: String(m.withdrawals),
+        sourceSnapshots: mergeSnapshot(p.sourceSnapshots, "aimsranking", snap),
         status: p.status === "pending" ? "active" : p.status,
-        lastSyncedAt: new Date(),
       })
       .where(eq(participant.id, p.id))
     synced++
@@ -703,6 +805,31 @@ async function syncViaAimsRanking(
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
   return { ok: true as const, synced, pending, warning: undefined as string | undefined }
+}
+
+/**
+ * Switch which stored source (AIMS Ranking or MetaAPI) is shown on the
+ * leaderboard and admin table. Instant: it only re-projects the already-synced
+ * snapshots into the flat metric columns — no external API is called. Rows that
+ * have no snapshot yet for the chosen source keep their previous values.
+ */
+export async function setDisplaySource(contestId: number, source: SourceKey) {
+  await requireAdmin()
+
+  const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
+  if (!c) return { ok: false as const, error: "Contest not found" }
+
+  const updated = { ...c, displaySource: source }
+  await db.update(contest).set({ displaySource: source }).where(eq(contest.id, contestId))
+  await projectDisplaySource(contestId, updated)
+
+  revalidatePath("/admin")
+  revalidatePath(`/admin/contests/${contestId}`)
+  if (c.slug) {
+    revalidatePath(`/embed/${c.slug}`)
+    revalidatePath(`/contests/${c.slug}`)
+  }
+  return { ok: true as const, source }
 }
 
 /* ----------------------- Compare data sources (read-only) ----------------------- */
