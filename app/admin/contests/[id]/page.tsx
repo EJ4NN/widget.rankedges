@@ -6,6 +6,7 @@ import { asc, eq } from "drizzle-orm"
 import { requireAdmin } from "@/lib/get-session"
 import { listParticipants, listBatches } from "@/app/actions/admin"
 import { ParticipantsTable } from "@/components/admin/participants-table"
+import { CompareSourcesCard } from "@/components/admin/compare-sources-card"
 import { EmbedSnippet } from "@/components/admin/embed-snippet"
 import { LeaderboardColumnsCard } from "@/components/admin/leaderboard-columns-card"
 import { BatchesCard } from "@/components/admin/batches-card"
@@ -88,6 +89,10 @@ export default async function AdminContestPage({
           platform: s.platform,
         }))}
       />
+
+      <div className="mt-6">
+        <CompareSourcesCard contestId={contestId} />
+      </div>
     </div>
   )
 }

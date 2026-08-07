@@ -704,3 +704,171 @@ async function syncViaAimsRanking(
   revalidatePath(`/admin/contests/${contestId}`)
   return { ok: true as const, synced, pending, warning: undefined as string | undefined }
 }
+
+/* ----------------------- Compare data sources (read-only) ----------------------- */
+
+/** A single source's live reading for one participant. */
+export type SourceSnapshot = {
+  available: boolean
+  reason?: string
+  equity: number
+  gain: number // raw gain % as the source reports it
+  rankEdgesGain: number // our computed metric: profit / deposits * 100
+  profit: number
+  lots: number
+  drawdown: number
+  deposits: number
+  withdrawals: number
+  trades: number | null
+}
+
+export type CompareRow = {
+  id: number
+  nickname: string
+  accountLogin: string
+  platform: string
+  aims: SourceSnapshot
+  meta: SourceSnapshot
+}
+
+const UNAVAILABLE = (reason: string): SourceSnapshot => ({
+  available: false,
+  reason,
+  equity: 0,
+  gain: 0,
+  rankEdgesGain: 0,
+  profit: 0,
+  lots: 0,
+  drawdown: 0,
+  deposits: 0,
+  withdrawals: 0,
+  trades: null,
+})
+
+/**
+ * Fetch each participant's metrics from BOTH the AIMS Ranking feed and MetaAPI
+ * at once, purely for admin comparison. This does NOT write any metrics to the
+ * database — the stored/ranked values are left untouched. Provisioning a
+ * MetaAPI account id (a one-time side effect) may still happen so we can read
+ * that account, but no equity/gain/etc. is persisted.
+ */
+export async function compareContestSources(contestId: number) {
+  await requireAdmin()
+
+  const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
+  if (!c) return { ok: false as const, error: "Contest not found" }
+
+  const rows = await db.select().from(participant).where(eq(participant.contestId, contestId))
+
+  // --- AIMS: one bulk fetch, matched by MT4 ID (same wide window as the sync) ---
+  let aimsById = new Map<string, AimsMetrics>()
+  let aimsError: string | null = null
+  if (isAimsRankingConfigured()) {
+    const now = new Date()
+    const DAY = 24 * 60 * 60 * 1000
+    const start = new Date(c.startDate)
+    const lower = new Date(Math.min(start.getTime(), now.getTime()) - 365 * DAY)
+    const upper = new Date(now.getTime() + 365 * DAY)
+    try {
+      const res = await fetchContestantMetrics({
+        competitionFrom: lower,
+        competitionTo: upper,
+        resultFrom: lower,
+        resultTo: upper,
+      })
+      aimsById = res.byMt4Id
+    } catch (e) {
+      aimsError = `AIMS fetch failed: ${(e as Error).message}`
+    }
+  } else {
+    aimsError = "AIMS Ranking is not configured"
+  }
+
+  const metaConfigured = isMetaApiConfigured()
+
+  const result: CompareRow[] = []
+  for (const p of rows) {
+    // AIMS snapshot
+    let aims: SourceSnapshot
+    if (aimsError) {
+      aims = UNAVAILABLE(aimsError)
+    } else {
+      const m = aimsById.get(p.accountLogin.trim())
+      if (!m) {
+        aims = UNAVAILABLE("Not in AIMS feed")
+      } else if (!m.hasResult) {
+        aims = UNAVAILABLE("Registered — no results yet")
+      } else {
+        const profit = m.profit || m.equity - m.deposits
+        aims = {
+          available: true,
+          equity: m.equity,
+          gain: m.gain,
+          rankEdgesGain: m.deposits > 0 ? (profit / m.deposits) * 100 : 0,
+          profit,
+          lots: m.lots,
+          drawdown: m.drawdown,
+          deposits: m.deposits,
+          withdrawals: m.withdrawals,
+          trades: null, // AIMS feed doesn't expose closed-trade counts
+        }
+      }
+    }
+
+    // MetaAPI snapshot (best-effort; provision the account id if missing)
+    let meta: SourceSnapshot
+    if (!metaConfigured) {
+      meta = UNAVAILABLE("MetaAPI not configured")
+    } else {
+      let accountId = p.metaApiAccountId
+      if (!accountId) {
+        try {
+          accountId = await provisionAccount({
+            name: `c${contestId}-${p.nickname}`,
+            login: p.accountLogin,
+            password: p.investorPassword,
+            server: p.serverName ?? "",
+            platform: (p.platform as "mt4" | "mt5") ?? "mt5",
+          })
+          await db.update(participant).set({ metaApiAccountId: accountId }).where(eq(participant.id, p.id))
+        } catch (e) {
+          const msg = (e as Error).message
+          meta = UNAVAILABLE(
+            /E_RESOURCE_SLOTS|resource slots/i.test(msg)
+              ? "MetaAPI account limit reached"
+              : /authenticate|invalid account|password/i.test(msg)
+                ? "Broker rejected login"
+                : /server .* not found|\.srv file/i.test(msg)
+                  ? "Server not recognized"
+                  : "Could not connect",
+          )
+          result.push({ id: p.id, nickname: p.nickname, accountLogin: p.accountLogin, platform: p.platform, aims, meta })
+          continue
+        }
+      }
+      const metrics = accountId ? await getAccountMetrics(accountId) : null
+      if (!metrics) {
+        meta = UNAVAILABLE("No metrics yet (connecting)")
+      } else {
+        const starting = Number(p.startingBalance ?? 0) || metrics.deposits || 0
+        const profit = starting > 0 ? metrics.equity - starting : metrics.profit
+        meta = {
+          available: true,
+          equity: metrics.equity,
+          gain: metrics.gain,
+          rankEdgesGain: metrics.deposits > 0 ? (metrics.profit / metrics.deposits) * 100 : 0,
+          profit,
+          lots: metrics.lots,
+          drawdown: metrics.maxDrawdown,
+          deposits: metrics.deposits,
+          withdrawals: metrics.withdrawals,
+          trades: metrics.trades,
+        }
+      }
+    }
+
+    result.push({ id: p.id, nickname: p.nickname, accountLogin: p.accountLogin, platform: p.platform, aims, meta })
+  }
+
+  return { ok: true as const, rows: result, aimsError: aimsError ?? undefined }
+}
