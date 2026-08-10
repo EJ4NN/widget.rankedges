@@ -86,6 +86,12 @@ function normalizeDataSource(v: FormDataEntryValue | null): "metaapi" | "aimsran
   return String(v) === "aimsranking" ? "aimsranking" : "metaapi"
 }
 
+// Ranking metric for a (non-batched) contest; unknown values fall back to gain.
+function normalizeContestWinnerType(v: FormDataEntryValue | null): string {
+  const s = String(v)
+  return ["gain", "absoluteGain", "rankEdgesGain", "lots"].includes(s) ? s : "gain"
+}
+
 export async function createContest(formData: FormData) {
   await requireAdmin()
   const name = String(formData.get("name") || "").trim()
@@ -103,6 +109,7 @@ export async function createContest(formData: FormData) {
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
   const dataSource = normalizeDataSource(formData.get("dataSource"))
+  const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
 
   if (!name || !startDate || !endDate) {
@@ -131,6 +138,7 @@ export async function createContest(formData: FormData) {
     sponsorLogoUrl: sponsorLogoUrl || null,
     allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
     dataSource,
+    winnerType,
     requireEmail,
     status: "upcoming",
   })
@@ -157,6 +165,7 @@ export async function updateContest(id: number, formData: FormData) {
   const sponsorLogoUrl = String(formData.get("sponsorLogoUrl") || "").trim()
   const allowedBrokers = formData.getAll("allowedBrokers").map((b) => String(b)).filter(Boolean)
   const dataSource = normalizeDataSource(formData.get("dataSource"))
+  const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
 
   if (!name || !startDate || !endDate) {
@@ -195,6 +204,7 @@ export async function updateContest(id: number, formData: FormData) {
       sponsorLogoUrl: sponsorLogoUrl || null,
       allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
       dataSource,
+      winnerType,
       requireEmail,
     })
     .where(eq(contest.id, id))

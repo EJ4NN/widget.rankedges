@@ -32,8 +32,11 @@ export async function ContestWidget({ slug }: { slug: string }) {
   const hasBatches = batches.length > 0
 
   const [rows, count, batchBlocks] = await Promise.all([
-    // Overall leaderboard (used when the contest has no batches).
-    hasBatches ? Promise.resolve([]) : getLeaderboard(contest.id, columns),
+    // Overall leaderboard (used when the contest has no batches). Rank by the
+    // contest's own winner metric (e.g. rankEdgesGain for AIMS contests).
+    hasBatches
+      ? Promise.resolve([])
+      : getLeaderboard(contest.id, columns, { winnerType: normalizeWinnerType(contest.winnerType) }),
     getParticipantCount(contest.id),
     // One leaderboard per batch, each ranked by that batch's winning metric.
     hasBatches
@@ -79,7 +82,7 @@ export async function ContestWidget({ slug }: { slug: string }) {
           {hasBatches ? (
             <BatchedLeaderboard batches={batchBlocks} columns={columns} />
           ) : (
-            <Leaderboard rows={rows} columns={columns} />
+            <Leaderboard rows={rows} columns={columns} highlightKey={normalizeWinnerType(contest.winnerType)} />
           )}
         </TabsContent>
 

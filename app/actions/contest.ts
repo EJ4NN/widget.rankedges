@@ -111,8 +111,13 @@ export async function getLeaderboard(
     // that metric, not on the broker `gain`), or non-zero equity. Only
     // truly-empty accounts sink. NULLS LAST keeps any null metric at the bottom
     // instead of Postgres' default NULLS FIRST for DESC.
+    //
+    // COALESCE(trades, 0) is essential: AIMS contests never populate `trades`
+    // (it stays NULL), so a bare `trades > 0` makes the whole OR evaluate to
+    // NULL for a zero/empty account (NULL OR FALSE = NULL), and NULL sorts
+    // FIRST under DESC — which floated empty accounts to the TOP of the board.
     .orderBy(
-      sql`(${participant.trades} > 0 OR COALESCE(${rankColumn}, 0) <> 0 OR COALESCE(${participant.currentEquity}, 0) <> 0) DESC`,
+      sql`(COALESCE(${participant.trades}, 0) > 0 OR COALESCE(${rankColumn}, 0) <> 0 OR COALESCE(${participant.currentEquity}, 0) <> 0) DESC`,
       sql`${rankColumn} DESC NULLS LAST`,
     )
 

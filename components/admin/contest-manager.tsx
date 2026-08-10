@@ -147,6 +147,24 @@ function ContestForm({
         </select>
       </div>
       <div className="flex flex-col gap-2">
+        <Label htmlFor="winnerType">Ranking metric</Label>
+        <p className="text-xs text-muted-foreground">
+          How traders are ranked on the leaderboard. AIMS Ranking contests should use RankEdges Gain (REG). (Contests
+          split into batches use each batch&apos;s own metric instead.)
+        </p>
+        <select
+          id="winnerType"
+          name="winnerType"
+          defaultValue={contest?.winnerType ?? "gain"}
+          className="h-11 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="gain">Gain % — broker/AIMS reported return</option>
+          <option value="rankEdgesGain">REG (RankEdges Gain) — profit ÷ deposits</option>
+          <option value="absoluteGain">Absolute gain %</option>
+          <option value="lots">Lots traded (volume)</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-2">
         <Label htmlFor="requireEmail">Registration</Label>
         <label
           htmlFor="requireEmail"
