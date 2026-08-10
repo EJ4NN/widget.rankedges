@@ -132,6 +132,10 @@ export const contest = pgTable("contest", {
   // Where live metrics are pulled from: "metaapi" (per-account provisioning) or
   // "aimsranking" (bulk contestant records from the AIMSCAP Ranking API).
   dataSource: text("dataSource").default("metaapi").notNull(),
+  // Ranking metric for contests WITHOUT batches (batched contests rank by each
+  // batch's own winnerType). "gain" | "absoluteGain" | "rankEdgesGain" | "lots".
+  // AIMS RankEdges contests should use "rankEdgesGain".
+  winnerType: text("winnerType").default("gain").notNull(),
   // Which stored source snapshot is shown on the leaderboard / admin table.
   // "aimsranking" | "metaapi". When null, falls back to `dataSource`. Toggling
   // this only re-projects existing snapshots — it never calls an external API.
