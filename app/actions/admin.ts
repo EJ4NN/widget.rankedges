@@ -11,7 +11,7 @@ import {
   type SourceKey,
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
-import { and, asc, desc, eq, ne } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
 import { isAimsRankingConfigured, fetchContestantMetrics, type AimsMetrics } from "@/lib/aimsranking"
@@ -466,6 +466,53 @@ export async function deleteParticipant(id: number) {
   revalidatePath("/admin")
 }
 
+/**
+ * Bulk-delete participants. Pass a list of ids to remove those rows, or set
+ * `allInContest` to a contest id to wipe every participant in that contest
+ * (used by the admin "Delete all" button for large test runs). Deletes in
+ * chunks so a 300+ participant test batch doesn't blow the query size.
+ */
+export async function deleteParticipants(opts: { ids?: number[]; allInContest?: number }) {
+  await requireAdmin()
+
+  let contestId = opts.allInContest ?? null
+  let deleted = 0
+
+  if (opts.allInContest != null) {
+    const res = await db
+      .delete(participant)
+      .where(eq(participant.contestId, opts.allInContest))
+      .returning({ id: participant.id })
+    deleted = res.length
+  } else if (opts.ids && opts.ids.length > 0) {
+    // Capture the contest for revalidation before the rows are gone.
+    const first = (
+      await db
+        .select({ contestId: participant.contestId })
+        .from(participant)
+        .where(eq(participant.id, opts.ids[0]))
+        .limit(1)
+    )[0]
+    contestId = first?.contestId ?? null
+
+    const CHUNK = 200
+    for (let i = 0; i < opts.ids.length; i += CHUNK) {
+      const slice = opts.ids.slice(i, i + CHUNK)
+      const res = await db
+        .delete(participant)
+        .where(inArray(participant.id, slice))
+        .returning({ id: participant.id })
+      deleted += res.length
+    }
+  } else {
+    return { ok: false as const, error: "Nothing to delete" }
+  }
+
+  revalidatePath("/admin")
+  if (contestId != null) revalidatePath(`/admin/contests/${contestId}`)
+  return { ok: true as const, deleted }
+}
+
 /** Flatten a stored snapshot into the numeric metric columns the app reads. */
 function snapshotToColumns(s: MetricSnapshot) {
   return {
@@ -645,12 +692,17 @@ export async function syncContest(
       continue
     }
 
-    const starting = Number(p.startingBalance ?? 0) || Number(metrics.deposits) || 0
     const equity = metrics.equity
-    const profit = starting > 0 ? equity - starting : metrics.profit
-    const profitPct = starting > 0 ? (profit / starting) * 100 : 0
-    // RankEdges gain: profit relative to deposits only (withdrawals excluded).
+    // Use MetaStats' own net trading profit — this matches the trader's MT4/MT5
+    // "Profit" figure exactly (it already excludes deposits/withdrawals). The
+    // old `equity - startingBalance` was wrong for anyone whose real deposits
+    // differed from the assumed starting balance (e.g. topped-up accounts),
+    // since it counted extra deposits as profit.
+    const profit = metrics.profit
+    // Percentage return relative to total deposits (withdrawals excluded).
     const deposits = Number(metrics.deposits) || 0
+    const profitPct = deposits > 0 ? (profit / deposits) * 100 : 0
+    // RankEdges gain uses the same profit-over-deposits basis.
     const rankEdgesGain = deposits > 0 ? (metrics.profit / deposits) * 100 : 0
 
     const snap: MetricSnapshot = {
@@ -977,8 +1029,10 @@ export async function compareContestSources(contestId: number) {
       if (!metrics) {
         meta = UNAVAILABLE("No metrics yet (connecting)")
       } else {
-        const starting = Number(p.startingBalance ?? 0) || metrics.deposits || 0
-        const profit = starting > 0 ? metrics.equity - starting : metrics.profit
+        // MetaStats' net trading profit — matches the trader's MT4/MT5 figure
+        // (excludes deposits/withdrawals). Don't derive it from equity minus a
+        // fixed starting balance, which breaks for topped-up accounts.
+        const profit = metrics.profit
         meta = {
           available: true,
           equity: metrics.equity,
