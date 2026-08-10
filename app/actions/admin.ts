@@ -11,7 +11,7 @@ import {
   type SourceKey,
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
-import { and, asc, desc, eq, ne } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
 import { isAimsRankingConfigured, fetchContestantMetrics, type AimsMetrics } from "@/lib/aimsranking"
@@ -464,6 +464,53 @@ export async function deleteParticipant(id: number) {
   await requireAdmin()
   await db.delete(participant).where(eq(participant.id, id))
   revalidatePath("/admin")
+}
+
+/**
+ * Bulk-delete participants. Pass a list of ids to remove those rows, or set
+ * `allInContest` to a contest id to wipe every participant in that contest
+ * (used by the admin "Delete all" button for large test runs). Deletes in
+ * chunks so a 300+ participant test batch doesn't blow the query size.
+ */
+export async function deleteParticipants(opts: { ids?: number[]; allInContest?: number }) {
+  await requireAdmin()
+
+  let contestId = opts.allInContest ?? null
+  let deleted = 0
+
+  if (opts.allInContest != null) {
+    const res = await db
+      .delete(participant)
+      .where(eq(participant.contestId, opts.allInContest))
+      .returning({ id: participant.id })
+    deleted = res.length
+  } else if (opts.ids && opts.ids.length > 0) {
+    // Capture the contest for revalidation before the rows are gone.
+    const first = (
+      await db
+        .select({ contestId: participant.contestId })
+        .from(participant)
+        .where(eq(participant.id, opts.ids[0]))
+        .limit(1)
+    )[0]
+    contestId = first?.contestId ?? null
+
+    const CHUNK = 200
+    for (let i = 0; i < opts.ids.length; i += CHUNK) {
+      const slice = opts.ids.slice(i, i + CHUNK)
+      const res = await db
+        .delete(participant)
+        .where(inArray(participant.id, slice))
+        .returning({ id: participant.id })
+      deleted += res.length
+    }
+  } else {
+    return { ok: false as const, error: "Nothing to delete" }
+  }
+
+  revalidatePath("/admin")
+  if (contestId != null) revalidatePath(`/admin/contests/${contestId}`)
+  return { ok: true as const, deleted }
 }
 
 /** Flatten a stored snapshot into the numeric metric columns the app reads. */

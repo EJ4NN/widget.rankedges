@@ -19,7 +19,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   deleteParticipant,
+  deleteParticipants,
   setParticipantStatus,
   syncContest,
   setParticipantBatch,
@@ -76,6 +85,10 @@ export function ParticipantsTable({
   const canSync = contestIsAims || metaApiConfigured
   const [reveal, setReveal] = useState<Record<number, boolean>>({})
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  // Bulk-delete confirmation: "selected" removes the checked rows, "all" wipes
+  // every participant in the contest. null = dialog closed.
+  const [confirmDelete, setConfirmDelete] = useState<null | "selected" | "all">(null)
+  const [deleting, setDeleting] = useState(false)
   const [pending, startTransition] = useTransition()
   const [syncing, setSyncing] = useState(false)
   const [autoSync, setAutoSync] = useState(false)
@@ -188,6 +201,27 @@ export function ParticipantsTable({
     void runSync(false, Array.from(selected))
   }
 
+  async function handleBulkDelete() {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try {
+      const res =
+        confirmDelete === "all"
+          ? await deleteParticipants({ allInContest: contestId })
+          : await deleteParticipants({ ids: Array.from(selected) })
+      if (!res.ok) {
+        toast.error(res.error ?? "Delete failed")
+        return
+      }
+      toast.success(`Deleted ${res.deleted} participant(s)`)
+      setSelected(new Set())
+      setConfirmDelete(null)
+      router.refresh()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -287,6 +321,28 @@ export function ParticipantsTable({
             <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
             {syncing ? "Syncing..." : "Sync all"}
           </Button>
+          {selected.size > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setConfirmDelete("selected")}
+              disabled={deleting}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete selected ({selected.size})
+            </Button>
+          )}
+          {participants.length > 0 && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setConfirmDelete("all")}
+              disabled={deleting}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              Delete all
+            </Button>
+          )}
         </div>
       </div>
 
@@ -545,6 +601,31 @@ export function ParticipantsTable({
           </Table>
         </div>
       )}
+
+      <Dialog open={confirmDelete !== null} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmDelete === "all"
+                ? `Delete all ${participants.length} participants?`
+                : `Delete ${selected.size} selected participant(s)?`}
+            </DialogTitle>
+            <DialogDescription>
+              This permanently removes {confirmDelete === "all" ? "every participant" : "the selected participants"}{" "}
+              from this contest, including their synced metrics. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setConfirmDelete(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={deleting}>
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
