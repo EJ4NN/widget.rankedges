@@ -19,7 +19,19 @@ export async function listBatches(contestId: number) {
 }
 
 export async function getContestBySlug(slug: string) {
-  const rows = await db.select().from(contest).where(eq(contest.slug, slug)).limit(1)
+  // Be forgiving about how the slug arrives when embedded on a third-party site:
+  // trim stray whitespace / trailing slashes and match case-insensitively so a
+  // copy-pasted URL with different casing still resolves instead of 404-ing.
+  const normalized = decodeURIComponent(slug ?? "")
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase()
+  if (!normalized) return null
+  const rows = await db
+    .select()
+    .from(contest)
+    .where(sql`lower(${contest.slug}) = ${normalized}`)
+    .limit(1)
   return rows[0] ? withEffectiveStatus(rows[0]) : null
 }
 
