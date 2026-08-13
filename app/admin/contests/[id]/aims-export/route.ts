@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { contest, participant } from "@/lib/db/schema"
 import { asc, eq } from "drizzle-orm"
-import { requireAdmin } from "@/lib/get-session"
+import { getCurrentAdmin, canManageContest } from "@/lib/authz"
 import { utils, write } from "xlsx"
 
 // Matches the AIMSCAP CRM upload template exactly:
@@ -18,12 +18,16 @@ const HEADERS = [
 const DATE_FMT = "yyyy-mm-dd hh:mm:ss"
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin()
+  const admin = await getCurrentAdmin()
 
   const { id } = await params
   const contestId = Number(id)
   if (Number.isNaN(contestId)) {
     return NextResponse.json({ error: "Invalid contest id" }, { status: 400 })
+  }
+
+  if (!(await canManageContest(admin, contestId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
