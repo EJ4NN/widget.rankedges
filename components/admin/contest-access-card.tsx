@@ -86,15 +86,15 @@ export function ContestAccessCard({ contestId, rows }: { contestId: number; rows
                   disabled={row.isOwner || (pending && busyId === row.id)}
                   onClick={() => toggle(row)}
                   className={cn(
-                    "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                    "relative box-border inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors",
                     checked ? "bg-primary" : "bg-muted-foreground/30",
                     row.isOwner ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-0.5 h-4 w-4 rounded-full bg-background transition-transform",
-                      checked ? "translate-x-4" : "translate-x-0.5",
+                      "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-sm ring-0 transition-transform",
+                      checked ? "translate-x-5" : "translate-x-0",
                     )}
                   />
                 </button>
