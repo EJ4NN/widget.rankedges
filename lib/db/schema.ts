@@ -7,6 +7,7 @@ import {
   integer,
   numeric,
   jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core"
 import type { LeaderboardColumns } from "@/lib/leaderboard-columns"
 
@@ -46,6 +47,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").default(false).notNull(),
   image: text("image"),
+  // Admin tier: "master" has full access (all contests, servers, branding,
+  // admins) and can assign contests; "admin" (sub-admin) can only manage
+  // contests they own or that a master assigned to them.
+  role: text("role").default("admin").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 })
@@ -111,6 +116,10 @@ export const brokerServer = pgTable("broker_server", {
 
 export const contest = pgTable("contest", {
   id: serial("id").primaryKey(),
+  // Sub-admin who created/owns this contest (user.id). Null for legacy rows,
+  // which are treated as master-owned. Not a hard FK to keep migrations simple;
+  // when an owner is deleted we transfer ownership to master.
+  ownerId: text("ownerId"),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   description: text("description"),
@@ -215,6 +224,23 @@ export const participant = pgTable("participant", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 })
 
+// Grants a sub-admin management access to a contest they don't own. Master
+// creates/removes these. Unique on (contestId, userId) to avoid duplicates.
+export const contestAssignment = pgTable(
+  "contestAssignment",
+  {
+    id: serial("id").primaryKey(),
+    contestId: integer("contestId").notNull(),
+    userId: text("userId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("contestAssignment_contest_user_uniq").on(t.contestId, t.userId),
+  }),
+)
+
+export type User = typeof user.$inferSelect
+export type ContestAssignment = typeof contestAssignment.$inferSelect
 export type Contest = typeof contest.$inferSelect
 export type Participant = typeof participant.$inferSelect
 export type BrokerServer = typeof brokerServer.$inferSelect

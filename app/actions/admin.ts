@@ -4,13 +4,21 @@ import { db } from "@/lib/db"
 import {
   brokerServer,
   contest,
+  contestAssignment,
   participant,
   batch,
   setting,
+  user as userTable,
   type MetricSnapshot,
   type SourceKey,
 } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
+import {
+  assertCanManageContest,
+  getAccessibleContestIds,
+  getCurrentAdmin,
+  requireMaster,
+} from "@/lib/authz"
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
@@ -49,7 +57,7 @@ export async function getBranding() {
 }
 
 export async function updateBranding(formData: FormData) {
-  await requireAdmin()
+  await requireMaster()
   const logoUrl = String(formData.get("logoUrl") || "").trim() || null
   const coBrandUrl = String(formData.get("coBrandUrl") || "").trim() || null
 
@@ -69,8 +77,18 @@ export async function updateBranding(formData: FormData) {
 /* ------------------------------- Contests ------------------------------- */
 
 export async function listContests() {
-  await requireAdmin()
-  return db.select().from(contest).orderBy(desc(contest.createdAt))
+  const admin = await getCurrentAdmin()
+  const accessible = await getAccessibleContestIds(admin)
+  // null = master (all contests). Otherwise scope to owned + assigned ids.
+  if (accessible === null) {
+    return db.select().from(contest).orderBy(desc(contest.createdAt))
+  }
+  if (accessible.length === 0) return []
+  return db
+    .select()
+    .from(contest)
+    .where(inArray(contest.id, accessible))
+    .orderBy(desc(contest.createdAt))
 }
 
 function slugify(s: string) {
@@ -93,7 +111,7 @@ function normalizeContestWinnerType(v: FormDataEntryValue | null): string {
 }
 
 export async function createContest(formData: FormData) {
-  await requireAdmin()
+  const admin = await getCurrentAdmin()
   const name = String(formData.get("name") || "").trim()
   const description = String(formData.get("description") || "").trim()
   const rules = String(formData.get("rules") || "").trim()
@@ -122,6 +140,7 @@ export async function createContest(formData: FormData) {
   if (existing.length) slug = `${slug}-${Date.now().toString(36)}`
 
   await db.insert(contest).values({
+    ownerId: admin.id,
     slug,
     name,
     description: description || null,
@@ -148,7 +167,7 @@ export async function createContest(formData: FormData) {
 }
 
 export async function updateContest(id: number, formData: FormData) {
-  await requireAdmin()
+  await assertCanManageContest(id)
   const name = String(formData.get("name") || "").trim()
   const description = String(formData.get("description") || "").trim()
   const rules = String(formData.get("rules") || "").trim()
@@ -215,13 +234,13 @@ export async function updateContest(id: number, formData: FormData) {
 }
 
 export async function updateContestStatus(id: number, status: string) {
-  await requireAdmin()
+  await assertCanManageContest(id)
   await db.update(contest).set({ status }).where(eq(contest.id, id))
   revalidatePath("/admin")
 }
 
 export async function updateLeaderboardColumns(id: number, columns: LeaderboardColumns) {
-  await requireAdmin()
+  await assertCanManageContest(id)
   // Normalize to a clean boolean map so only known keys are persisted.
   const clean = resolveColumns(columns)
   await db.update(contest).set({ leaderboardColumns: clean }).where(eq(contest.id, id))
@@ -231,9 +250,10 @@ export async function updateLeaderboardColumns(id: number, columns: LeaderboardC
 }
 
 export async function deleteContest(id: number) {
-  await requireAdmin()
+  await assertCanManageContest(id)
   await db.delete(participant).where(eq(participant.contestId, id))
   await db.delete(batch).where(eq(batch.contestId, id))
+  await db.delete(contestAssignment).where(eq(contestAssignment.contestId, id))
   await db.delete(contest).where(eq(contest.id, id))
   revalidatePath("/admin")
 }
@@ -241,7 +261,7 @@ export async function deleteContest(id: number) {
 /* -------------------------------- Batches ------------------------------- */
 
 export async function listBatches(contestId: number) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
   return db
     .select()
     .from(batch)
@@ -250,7 +270,7 @@ export async function listBatches(contestId: number) {
 }
 
 export async function createBatch(contestId: number, formData: FormData) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
   const name = String(formData.get("name") || "").trim()
   const startDate = String(formData.get("startDate") || "")
   const endDate = String(formData.get("endDate") || "")
@@ -298,6 +318,7 @@ export async function updateBatch(id: number, formData: FormData) {
 
   const row = (await db.select().from(batch).where(eq(batch.id, id)).limit(1))[0]
   if (!row) return { ok: false as const, error: "Batch not found" }
+  await assertCanManageContest(row.contestId)
 
   await db
     .update(batch)
@@ -320,6 +341,7 @@ export async function deleteBatch(id: number) {
   await requireAdmin()
   const row = (await db.select().from(batch).where(eq(batch.id, id)).limit(1))[0]
   if (!row) return { ok: false as const }
+  await assertCanManageContest(row.contestId)
   // Unassign participants from this batch, then remove it.
   await db.update(participant).set({ batchId: null }).where(eq(participant.batchId, id))
   await db.delete(batch).where(eq(batch.id, id))
@@ -328,8 +350,21 @@ export async function deleteBatch(id: number) {
   return { ok: true as const }
 }
 
+/**
+ * Resolve the contest a participant belongs to and assert the current admin can
+ * manage it. Throws if the participant is missing or access is denied.
+ */
+async function assertCanManageParticipant(participantId: number) {
+  const row = (
+    await db.select({ contestId: participant.contestId }).from(participant).where(eq(participant.id, participantId)).limit(1)
+  )[0]
+  if (!row) throw new Error("Participant not found")
+  await assertCanManageContest(row.contestId)
+  return row.contestId
+}
+
 export async function setParticipantBatch(participantId: number, batchId: number | null) {
-  await requireAdmin()
+  await assertCanManageParticipant(participantId)
   await db.update(participant).set({ batchId }).where(eq(participant.id, participantId))
   revalidatePath("/admin")
   return { ok: true as const }
@@ -343,7 +378,7 @@ export async function listServers() {
 }
 
 export async function createServer(formData: FormData) {
-  await requireAdmin()
+  await requireMaster()
   const name = String(formData.get("name") || "").trim()
   const platform = String(formData.get("platform") || "").trim()
   const company = String(formData.get("company") || "").trim()
@@ -355,7 +390,7 @@ export async function createServer(formData: FormData) {
 }
 
 export async function deleteServer(id: number) {
-  await requireAdmin()
+  await requireMaster()
   await db.delete(brokerServer).where(eq(brokerServer.id, id))
   revalidatePath("/admin")
 }
@@ -363,7 +398,7 @@ export async function deleteServer(id: number) {
 /* ----------------------------- Participants ----------------------------- */
 
 export async function listParticipants(contestId: number) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
   return db
     .select()
     .from(participant)
@@ -372,7 +407,7 @@ export async function listParticipants(contestId: number) {
 }
 
 export async function addParticipant(contestId: number, formData: FormData) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
 
   const nickname = String(formData.get("nickname") || "").trim()
   const realName = String(formData.get("realName") || "").trim()
@@ -458,20 +493,20 @@ export async function addParticipant(contestId: number, formData: FormData) {
 
 /** Change a single participant's data source (null = inherit contest default). */
 export async function setParticipantDataSource(id: number, source: "metaapi" | "aimsranking" | null) {
-  await requireAdmin()
+  await assertCanManageParticipant(id)
   await db.update(participant).set({ dataSource: source }).where(eq(participant.id, id))
   revalidatePath("/admin")
   return { ok: true as const }
 }
 
 export async function setParticipantStatus(id: number, status: string) {
-  await requireAdmin()
+  await assertCanManageParticipant(id)
   await db.update(participant).set({ status }).where(eq(participant.id, id))
   revalidatePath("/admin")
 }
 
 export async function deleteParticipant(id: number) {
-  await requireAdmin()
+  await assertCanManageParticipant(id)
   await db.delete(participant).where(eq(participant.id, id))
   revalidatePath("/admin")
 }
@@ -483,27 +518,29 @@ export async function deleteParticipant(id: number) {
  * chunks so a 300+ participant test batch doesn't blow the query size.
  */
 export async function deleteParticipants(opts: { ids?: number[]; allInContest?: number }) {
-  await requireAdmin()
+  await getCurrentAdmin()
 
   let contestId = opts.allInContest ?? null
   let deleted = 0
 
   if (opts.allInContest != null) {
+    await assertCanManageContest(opts.allInContest)
     const res = await db
       .delete(participant)
       .where(eq(participant.contestId, opts.allInContest))
       .returning({ id: participant.id })
     deleted = res.length
   } else if (opts.ids && opts.ids.length > 0) {
+    // Verify the caller can manage every contest these participants belong to,
+    // so a sub-admin can't delete rows from contests outside their scope.
+    const owningRows = await db
+      .select({ id: participant.id, contestId: participant.contestId })
+      .from(participant)
+      .where(inArray(participant.id, opts.ids))
+    const contestIds = Array.from(new Set(owningRows.map((r) => r.contestId)))
+    for (const cid of contestIds) await assertCanManageContest(cid)
     // Capture the contest for revalidation before the rows are gone.
-    const first = (
-      await db
-        .select({ contestId: participant.contestId })
-        .from(participant)
-        .where(eq(participant.id, opts.ids[0]))
-        .limit(1)
-    )[0]
-    contestId = first?.contestId ?? null
+    contestId = owningRows[0]?.contestId ?? null
 
     const CHUNK = 200
     for (let i = 0; i < opts.ids.length; i += CHUNK) {
@@ -586,7 +623,7 @@ export async function syncContest(
   // the admin can populate a second source's snapshot for comparison/toggling.
   syncSource?: SourceKey,
 ) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, synced: 0, error: "Contest not found" }
@@ -876,7 +913,7 @@ async function syncViaAimsRanking(
  * have no snapshot yet for the chosen source keep their previous values.
  */
 export async function setDisplaySource(contestId: number, source: SourceKey) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, error: "Contest not found" }
@@ -942,7 +979,7 @@ const UNAVAILABLE = (reason: string): SourceSnapshot => ({
  * that account, but no equity/gain/etc. is persisted.
  */
 export async function compareContestSources(contestId: number) {
-  await requireAdmin()
+  await assertCanManageContest(contestId)
 
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, error: "Contest not found" }
@@ -1062,4 +1099,60 @@ export async function compareContestSources(contestId: number) {
   }
 
   return { ok: true as const, rows: result, aimsError: aimsError ?? undefined }
+}
+
+/* ----------------------- Contest access (master only) ----------------------- */
+
+/**
+ * The contest owner plus every sub-admin, each flagged with whether they
+ * currently have access to this contest (owner is always true and locked).
+ * Master-only.
+ */
+export async function listContestAccess(contestId: number) {
+  await requireMaster()
+  const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
+  if (!c) return { ok: false as const, error: "Contest not found" }
+
+  const admins = await db
+    .select({ id: userTable.id, name: userTable.name, email: userTable.email, role: userTable.role })
+    .from(userTable)
+    .orderBy(asc(userTable.name))
+
+  const assignedRows = await db
+    .select({ userId: contestAssignment.userId })
+    .from(contestAssignment)
+    .where(eq(contestAssignment.contestId, contestId))
+  const assigned = new Set(assignedRows.map((r) => r.userId))
+
+  const rows = admins
+    .filter((a) => a.role !== "master") // master already has access to everything
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      email: a.email,
+      isOwner: a.id === c.ownerId,
+      assigned: a.id === c.ownerId || assigned.has(a.id),
+    }))
+
+  return { ok: true as const, ownerId: c.ownerId, rows }
+}
+
+/** Grant a sub-admin management access to a contest. Master-only. */
+export async function assignContest(contestId: number, userId: string) {
+  await requireMaster()
+  await db.insert(contestAssignment).values({ contestId, userId }).onConflictDoNothing()
+  revalidatePath("/admin")
+  revalidatePath(`/admin/contests/${contestId}`)
+  return { ok: true as const }
+}
+
+/** Revoke a sub-admin's assigned access to a contest. Master-only. */
+export async function unassignContest(contestId: number, userId: string) {
+  await requireMaster()
+  await db
+    .delete(contestAssignment)
+    .where(and(eq(contestAssignment.contestId, contestId), eq(contestAssignment.userId, userId)))
+  revalidatePath("/admin")
+  revalidatePath(`/admin/contests/${contestId}`)
+  return { ok: true as const }
 }
