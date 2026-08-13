@@ -21,6 +21,7 @@ type AdminUser = {
   id: string
   name: string
   email: string
+  role: string
   createdAt: Date | string
 }
 
@@ -140,17 +141,28 @@ export function AdminsManager({
       <ul className="divide-y divide-border">
         {users.map((u) => {
           const isSelf = u.id === currentUserId
+          const isMasterUser = u.role === "master"
           return (
             <li key={u.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span
+                  className={
+                    "flex h-9 w-9 items-center justify-center rounded-full " +
+                    (isMasterUser ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground")
+                  }
+                >
                   <ShieldCheck className="h-4 w-4" aria-hidden />
                 </span>
                 <div>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                     {u.name}
+                    {isMasterUser && (
+                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        Master
+                      </span>
+                    )}
                     {isSelf && (
-                      <span className="ml-2 rounded bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                         You
                       </span>
                     )}
@@ -162,7 +174,7 @@ export function AdminsManager({
                 size="icon"
                 variant="ghost"
                 className="text-muted-foreground hover:text-destructive"
-                disabled={isSelf || deletingId === u.id}
+                disabled={isSelf || isMasterUser || deletingId === u.id}
                 onClick={() => handleDelete(u.id)}
                 aria-label={`Remove ${u.name}`}
               >
