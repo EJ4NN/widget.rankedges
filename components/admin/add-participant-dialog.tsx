@@ -43,6 +43,11 @@ export function AddParticipantDialog({
     [servers, platform],
   )
 
+  // The source this trader actually syncs from (override wins over contest default).
+  const effectiveSource = source === "inherit" ? contestDataSource : source
+  // AIMS Ranking matches by MT4/MT5 ID, so the investor password is optional there.
+  const isAims = effectiveSource === "aimsranking"
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -195,13 +200,13 @@ export function AddParticipantDialog({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="investorPassword">Investor password</Label>
+              <Label htmlFor="investorPassword">Investor password{isAims ? " (optional)" : ""}</Label>
               <Input
                 id="investorPassword"
                 name="investorPassword"
                 type="password"
-                placeholder="Read-only"
-                required
+                placeholder={isAims ? "Optional for AIMS" : "Read-only"}
+                required={!isAims}
               />
             </div>
           </div>

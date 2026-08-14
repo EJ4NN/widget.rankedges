@@ -182,7 +182,9 @@ export async function joinContest(input: JoinInput) {
     !input.realName?.trim() ||
     !input.platform ||
     !input.serverId ||
-    !input.investorPassword?.trim()
+    // Investor password is required for MetaAPI (needed to sync), but optional
+    // for AIMS Ranking, which matches results by MT4/MT5 ID.
+    (!isAims && !input.investorPassword?.trim())
   ) {
     return { ok: false as const, error: "Please complete all account details" }
   }
@@ -237,7 +239,7 @@ export async function joinContest(input: JoinInput) {
       serverId: server.id,
       serverName: server.name,
       accountLogin: input.accountLogin.trim(),
-      investorPassword: input.investorPassword!,
+      investorPassword: input.investorPassword?.trim() || null,
       metaApiAccountId: null,
       status: "pending",
       startingBalance: c.startingBalance,

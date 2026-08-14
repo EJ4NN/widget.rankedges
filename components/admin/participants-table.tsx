@@ -512,20 +512,22 @@ export function ParticipantsTable({
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs">
-                          {reveal[p.id] ? p.investorPassword : "••••••••"}
+                          {p.investorPassword ? (reveal[p.id] ? p.investorPassword : "••••••••") : "—"}
                         </span>
-                        <button
-                          type="button"
-                          aria-label="Toggle password"
-                          onClick={() => setReveal((r) => ({ ...r, [p.id]: !r[p.id] }))}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          {reveal[p.id] ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                        {p.investorPassword ? (
+                          <button
+                            type="button"
+                            aria-label="Toggle password"
+                            onClick={() => setReveal((r) => ({ ...r, [p.id]: !r[p.id] }))}
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            {reveal[p.id] ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-right font-mono">
