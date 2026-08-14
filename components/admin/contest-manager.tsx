@@ -143,7 +143,7 @@ function ContestForm({
           className="h-11 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="metaapi">MetaAPI — connect each MT4/MT5 account (investor password)</option>
-          <option value="aimsranking">AIMS Ranking — pull results from the AIMSCAP API (by MT4 ID)</option>
+          <option value="aimsranking">AIMS Ranking — pull results from the AIMS/AIMSCAP API (by MT4/MT5 ID)</option>
         </select>
       </div>
       <div className="flex flex-col gap-2">
