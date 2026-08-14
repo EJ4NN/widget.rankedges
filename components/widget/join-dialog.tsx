@@ -94,7 +94,9 @@ export function JoinDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!platform || !serverId || !accountLogin.trim() || !investorPassword.trim()) return
+    if (!platform || !serverId || !accountLogin.trim()) return
+    // AIMS Ranking matches by MT4/MT5 ID, so the investor password is optional there.
+    if (!isAims && !investorPassword.trim()) return
     setLoading(true)
     const res = await joinContest({
       contestId,
@@ -289,19 +291,21 @@ export function JoinDialog({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="investor">Investor password (read-only)</Label>
+                  <Label htmlFor="investor">Investor password (read-only){isAims ? " (optional)" : ""}</Label>
                   <Input
                     id="investor"
                     type="password"
                     value={investorPassword}
                     onChange={(e) => setInvestorPassword(e.target.value)}
                     placeholder="Read-only password"
-                    required
+                    required={!isAims}
                     className="h-12"
                   />
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Lock className="h-3 w-3" aria-hidden />
-                    The investor password only allows viewing — no trading or withdrawals.
+                    {isAims
+                      ? "Optional — AIMS Ranking matches your results by MT4/MT5 ID."
+                      : "The investor password only allows viewing — no trading or withdrawals."}
                   </p>
                 </div>
 

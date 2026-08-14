@@ -194,7 +194,9 @@ export const participant = pgTable("participant", {
   serverId: integer("serverId"),
   serverName: text("serverName"),
   accountLogin: text("accountLogin").notNull(),
-  investorPassword: text("investorPassword").notNull(),
+  // Optional: required for MetaAPI syncing, but AIMS Ranking matches by MT4/MT5
+  // ID so it can be left blank there.
+  investorPassword: text("investorPassword"),
   metaApiAccountId: text("metaApiAccountId"),
   status: text("status").default("pending").notNull(), // pending | active | rejected | disqualified
   startingBalance: numeric("startingBalance", { precision: 18, scale: 2 }),

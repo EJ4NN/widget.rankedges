@@ -420,18 +420,25 @@ export async function addParticipant(contestId: number, formData: FormData) {
   const dataSourceInput = String(formData.get("dataSource") || "").trim()
   const dataSource = dataSourceInput === "metaapi" || dataSourceInput === "aimsranking" ? dataSourceInput : null
 
-  if (!nickname || !realName || !platform || !serverName || !accountLogin || !investorPassword) {
-    return { ok: false as const, error: "All fields except email are required" }
-  }
-  if (platform !== "mt4" && platform !== "mt5") {
-    return { ok: false as const, error: "Platform must be MT4 or MT5" }
-  }
-
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, error: "Contest not found" }
 
   // Which source this trader will actually sync from (override wins over contest default).
   const effectiveSource = dataSource ?? c.dataSource
+  // AIMS Ranking matches by MT4/MT5 ID, so the investor password is optional there.
+  const isAims = effectiveSource === "aimsranking"
+
+  if (!nickname || !realName || !platform || !serverName || !accountLogin || (!isAims && !investorPassword)) {
+    return {
+      ok: false as const,
+      error: isAims
+        ? "All fields except email and investor password are required"
+        : "All fields except email are required",
+    }
+  }
+  if (platform !== "mt4" && platform !== "mt5") {
+    return { ok: false as const, error: "Platform must be MT4 or MT5" }
+  }
 
   // Auto-assign to the batch whose active period covers now (admins can move
   // participants between batches later from the participants table).
@@ -476,7 +483,7 @@ export async function addParticipant(contestId: number, formData: FormData) {
     dataSource,
     serverName,
     accountLogin,
-    investorPassword,
+    investorPassword: investorPassword || null,
     metaApiAccountId,
     status: "active",
     startingBalance: c.startingBalance,
@@ -711,7 +718,7 @@ export async function syncContest(
         accountId = await provisionAccount({
           name: `c${contestId}-${p.nickname}`,
           login: p.accountLogin,
-          password: p.investorPassword,
+          password: p.investorPassword ?? "",
           server: p.serverName ?? "",
           platform: (p.platform as "mt4" | "mt5") ?? "mt5",
         })
@@ -1052,7 +1059,7 @@ export async function compareContestSources(contestId: number) {
           accountId = await provisionAccount({
             name: `c${contestId}-${p.nickname}`,
             login: p.accountLogin,
-            password: p.investorPassword,
+            password: p.investorPassword ?? "",
             server: p.serverName ?? "",
             platform: (p.platform as "mt4" | "mt5") ?? "mt5",
           })
