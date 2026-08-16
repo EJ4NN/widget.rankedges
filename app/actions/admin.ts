@@ -896,9 +896,33 @@ async function syncViaAimsRanking(
       continue
     }
     if (!m.hasResult) {
-      // Registered in AIMS but results aren't live yet (balance/equity/gain are
-      // "-"). Writing them would produce a bogus -100% gain, so leave pending
-      // until AIMS posts real trading results.
+      // Registered in AIMS but trading results aren't live yet (balance/equity/
+      // gain come back as "-"). We must NOT compute a gain (equity 0 - deposit =
+      // bogus -100%), BUT the deposit/withdrawal figures ARE already known, so
+      // store those and stamp the sync time. This proves the trader IS in the
+      // feed (badge flips to "In AIMS feed") and shows their deposit, while
+      // performance stays 0 until AIMS posts real results. Status is left as-is
+      // (not activated) and this is still counted separately from a full sync.
+      const registeredSnap: MetricSnapshot = {
+        currentBalance: m.balance,
+        currentEquity: m.equity,
+        profit: 0,
+        profitPct: 0,
+        gain: 0,
+        absoluteGain: 0,
+        rankEdgesGain: 0,
+        lots: 0,
+        maxDrawdown: 0,
+        deposits: m.deposits,
+        withdrawals: m.withdrawals,
+        trades: null,
+        winRate: 0,
+        syncedAt: new Date().toISOString(),
+      }
+      await db
+        .update(participant)
+        .set({ sourceSnapshots: mergeSnapshot(p.sourceSnapshots, "aimsranking", registeredSnap) })
+        .where(eq(participant.id, p.id))
       pending++
       matchedNoResult++
       continue
