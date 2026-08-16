@@ -662,6 +662,10 @@ export async function syncContest(
 
   let synced = 0
   let pending = 0
+  // AIMS-only breakdown of the pending rows (see syncViaAimsRanking): how many
+  // are in the feed but awaiting live results vs. not in the feed at all.
+  let matchedNoResult = 0
+  let notInFeed = 0
   // The most relevant provisioning failure, surfaced to the admin so a
   // "cannot sync" is explained instead of silently counted as pending.
   let provisionError: string | null = null
@@ -677,6 +681,8 @@ export async function syncContest(
     } else {
       synced += r.synced
       pending += r.pending ?? 0
+      matchedNoResult += r.matchedNoResult ?? 0
+      notInFeed += r.notInFeed ?? 0
       if (r.warning) provisionError = r.warning
     }
   }
@@ -690,7 +696,14 @@ export async function syncContest(
       revalidatePath(`/embed/${c.slug}`)
       revalidatePath(`/contests/${c.slug}`)
     }
-    return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
+    return {
+      ok: true as const,
+      synced,
+      pending,
+      matchedNoResult,
+      notInFeed,
+      warning: provisionError ?? undefined,
+    }
   }
 
   if (!isMetaApiConfigured()) {
@@ -798,7 +811,14 @@ export async function syncContest(
     revalidatePath(`/embed/${c.slug}`)
     revalidatePath(`/contests/${c.slug}`)
   }
-  return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
+  return {
+    ok: true as const,
+    synced,
+    pending,
+    matchedNoResult,
+    notInFeed,
+    warning: provisionError ?? undefined,
+  }
 }
 
 /**
@@ -862,11 +882,17 @@ async function syncViaAimsRanking(
 
   let synced = 0
   let pending = 0
+  // Split the "pending" reasons so the UI can tell the admin what's actually
+  // going on: an account that IS in the feed but has no live results yet is very
+  // different from one whose MT4 ID isn't in the feed at all.
+  let matchedNoResult = 0
+  let notInFeed = 0
   for (const p of rows) {
     const m = byMt4Id.get(p.accountLogin.trim())
     if (!m) {
       // Contestant not found in the AIMS feed yet (not approved / no results).
       pending++
+      notInFeed++
       continue
     }
     if (!m.hasResult) {
@@ -874,6 +900,7 @@ async function syncViaAimsRanking(
       // "-"). Writing them would produce a bogus -100% gain, so leave pending
       // until AIMS posts real trading results.
       pending++
+      matchedNoResult++
       continue
     }
 
@@ -915,7 +942,14 @@ async function syncViaAimsRanking(
 
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
-  return { ok: true as const, synced, pending, warning: undefined as string | undefined }
+  return {
+    ok: true as const,
+    synced,
+    pending,
+    matchedNoResult,
+    notInFeed,
+    warning: undefined as string | undefined,
+  }
 }
 
 /**
