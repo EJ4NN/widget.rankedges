@@ -27,6 +27,7 @@ import { put } from "@vercel/blob"
 import { resolveColumns, type LeaderboardColumns } from "@/lib/leaderboard-columns"
 import { normalizeWinnerType } from "@/lib/winner-type"
 import { resolveBatchForDate } from "@/lib/batch-phase"
+import { effectiveContestStatus } from "@/lib/contest-status"
 
 /* ------------------------------- Uploads -------------------------------- */
 
@@ -635,7 +636,20 @@ export async function syncContest(
   syncSource?: SourceKey,
 ) {
   await assertCanManageContest(contestId)
+  return runContestSync(contestId, participantIds, syncSource)
+}
 
+/**
+ * Core contest sync engine. Callers MUST authorize access first: `syncContest`
+ * checks the admin session, and `runScheduledAimsSync` checks CRON_SECRET. This
+ * is intentionally NOT exported so it can never be invoked directly as a server
+ * action (which would bypass both guards).
+ */
+async function runContestSync(
+  contestId: number,
+  participantIds?: number[],
+  syncSource?: SourceKey,
+) {
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) return { ok: false as const, synced: 0, error: "Contest not found" }
 
@@ -819,6 +833,49 @@ export async function syncContest(
     notInFeed,
     warning: provisionError ?? undefined,
   }
+}
+
+/**
+ * Scheduled (cron) auto-sync for every AIMS Ranking contest that is currently
+ * live or upcoming. Runs the same engine as the admin "Sync all" button but
+ * without an admin session — so it is guarded by CRON_SECRET, which Vercel Cron
+ * sends automatically as `Authorization: Bearer <CRON_SECRET>`. The caller (the
+ * cron route) has already verified the header; we re-check the secret here so
+ * this exported server action can't be triggered directly without it.
+ *
+ * Only AIMS-sourced contests are auto-synced. Ended contests are skipped (their
+ * standings are already final); upcoming ones are included so registrations and
+ * deposits stay fresh before the contest goes live.
+ */
+export async function runScheduledAimsSync(secret: string) {
+  const expected = process.env.CRON_SECRET
+  if (!expected || secret !== expected) {
+    return { ok: false as const, error: "Unauthorized" }
+  }
+
+  const now = new Date()
+  const aimsContests = (
+    await db.select().from(contest).where(eq(contest.dataSource, "aimsranking"))
+  ).filter((c) => effectiveContestStatus(c, now) !== "ended")
+
+  const results: { contestId: number; slug: string | null; synced: number; pending: number; error?: string }[] = []
+  for (const c of aimsContests) {
+    try {
+      const r = await runContestSync(c.id)
+      results.push({
+        contestId: c.id,
+        slug: c.slug,
+        synced: r.ok ? r.synced : 0,
+        pending: r.ok ? (r.pending ?? 0) : 0,
+        error: r.ok ? undefined : r.error,
+      })
+    } catch (e) {
+      console.log(`[v0] scheduled sync failed for contest ${c.id}:`, (e as Error).message)
+      results.push({ contestId: c.id, slug: c.slug, synced: 0, pending: 0, error: (e as Error).message })
+    }
+  }
+
+  return { ok: true as const, contests: results.length, results }
 }
 
 /**
