@@ -141,6 +141,11 @@ export const contest = pgTable("contest", {
   // Where live metrics are pulled from: "metaapi" (per-account provisioning) or
   // "aimsranking" (bulk contestant records from the AIMSCAP Ranking API).
   dataSource: text("dataSource").default("metaapi").notNull(),
+  // Optional (AIMS Ranking only): the exact competition name on the AIMS/AIMSCAP
+  // feed to scope this contest's sync to. When null/blank, the sync matches every
+  // competition by MT4/MT5 ID. Set this to avoid MT4 IDs colliding across
+  // different AIMS competitions.
+  aimsCompetitionName: text("aimsCompetitionName"),
   // Ranking metric for contests WITHOUT batches (batched contests rank by each
   // batch's own winnerType). "gain" | "absoluteGain" | "rankEdgesGain" | "lots".
   // AIMS RankEdges contests should use "rankEdgesGain".

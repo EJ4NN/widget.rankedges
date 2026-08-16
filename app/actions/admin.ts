@@ -129,6 +129,7 @@ export async function createContest(formData: FormData) {
   const dataSource = normalizeDataSource(formData.get("dataSource"))
   const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
+  const aimsCompetitionName = String(formData.get("aimsCompetitionName") || "").trim()
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -157,6 +158,7 @@ export async function createContest(formData: FormData) {
     sponsorLogoUrl: sponsorLogoUrl || null,
     allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
     dataSource,
+    aimsCompetitionName: aimsCompetitionName || null,
     winnerType,
     requireEmail,
     status: "upcoming",
@@ -186,6 +188,7 @@ export async function updateContest(id: number, formData: FormData) {
   const dataSource = normalizeDataSource(formData.get("dataSource"))
   const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
+  const aimsCompetitionName = String(formData.get("aimsCompetitionName") || "").trim()
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -223,6 +226,7 @@ export async function updateContest(id: number, formData: FormData) {
       sponsorLogoUrl: sponsorLogoUrl || null,
       allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
       dataSource,
+      aimsCompetitionName: aimsCompetitionName || null,
       winnerType,
       requireEmail,
     })
@@ -831,13 +835,14 @@ async function syncViaAimsRanking(
   let rawContestantCount = 0
   try {
     const res = await fetchContestantMetrics({
-      competitionFrom: lower,
-      competitionTo: upper,
-      resultFrom: lower,
-      resultTo: upper,
-    })
-    byMt4Id = res.byMt4Id
-    rawContestantCount = res.rawContestantCount
+  competitionFrom: lower,
+  competitionTo: upper,
+  resultFrom: lower,
+  resultTo: upper,
+  competitionName: c.aimsCompetitionName ?? undefined,
+  })
+  byMt4Id = res.byMt4Id
+  rawContestantCount = res.rawContestantCount
   } catch (e) {
     console.log("[v0] AIMSranking fetch failed:", (e as Error).message)
     return { ok: false as const, synced: 0, error: `AIMS Ranking sync failed: ${(e as Error).message}` }
@@ -1003,13 +1008,14 @@ export async function compareContestSources(contestId: number) {
     const lower = new Date(Math.min(start.getTime(), now.getTime()) - 365 * DAY)
     const upper = new Date(now.getTime() + 365 * DAY)
     try {
-      const res = await fetchContestantMetrics({
-        competitionFrom: lower,
-        competitionTo: upper,
-        resultFrom: lower,
-        resultTo: upper,
-      })
-      aimsById = res.byMt4Id
+    const res = await fetchContestantMetrics({
+  competitionFrom: lower,
+  competitionTo: upper,
+  resultFrom: lower,
+  resultTo: upper,
+  competitionName: c.aimsCompetitionName ?? undefined,
+  })
+  aimsById = res.byMt4Id
     } catch (e) {
       aimsError = `AIMS fetch failed: ${(e as Error).message}`
     }
