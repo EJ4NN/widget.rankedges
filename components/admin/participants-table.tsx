@@ -141,6 +141,15 @@ export function ParticipantsTable({
               description: res.warning,
               duration: 8000,
             })
+          } else if (usedAims && res.synced === 0 && (res.matchedNoResult ?? 0) > 0) {
+            // The accounts ARE in the AIMS feed — results just aren't live yet
+            // (competition hasn't started / AIMS hasn't posted them). This is
+            // expected before a contest begins, not a matching problem.
+            const extra = (res.notInFeed ?? 0) > 0 ? ` ${res.notInFeed} not in the feed.` : ""
+            toast.info("Traders found — results not live yet", {
+              description: `${res.matchedNoResult} account(s) are in the AIMS feed but have no results yet.${extra}`,
+              duration: 8000,
+            })
           } else if (usedAims && res.synced === 0 && res.pending) {
             // Nothing matched the AIMS feed — most often the MT4 IDs uploaded to
             // the CRM don't match the ones traders joined with.
@@ -151,7 +160,7 @@ export function ParticipantsTable({
           } else if (res.pending) {
             toast.success(`Synced ${res.synced} account(s)`, {
               description: usedAims
-                ? `${res.pending} not in the AIMS feed yet.`
+                ? `${res.matchedNoResult ?? res.pending} awaiting results, ${res.notInFeed ?? 0} not in the feed.`
                 : `${res.pending} still connecting — will retry.`,
             })
           } else {

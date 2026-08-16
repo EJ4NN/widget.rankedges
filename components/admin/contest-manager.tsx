@@ -147,6 +147,19 @@ function ContestForm({
         </select>
       </div>
       <div className="flex flex-col gap-2">
+        <Label htmlFor="aimsCompetitionName">AIMS competition name (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          AIMS Ranking only. Must match the competition name on the AIMS/AIMSCAP feed exactly. Leave blank to match every
+          competition by MT4/MT5 ID. Set it to scope the sync to one competition (avoids MT4 IDs colliding across events).
+        </p>
+        <Input
+          id="aimsCompetitionName"
+          name="aimsCompetitionName"
+          defaultValue={contest?.aimsCompetitionName ?? ""}
+          placeholder={contest?.name ? `e.g. ${contest.name}` : "e.g. AIMS VN CUP"}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
         <Label htmlFor="winnerType">Ranking metric</Label>
         <p className="text-xs text-muted-foreground">
           How traders are ranked on the leaderboard. AIMS Ranking contests should use RankEdges Gain (REG). (Contests

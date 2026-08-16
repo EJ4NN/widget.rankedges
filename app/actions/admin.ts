@@ -129,6 +129,7 @@ export async function createContest(formData: FormData) {
   const dataSource = normalizeDataSource(formData.get("dataSource"))
   const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
+  const aimsCompetitionName = String(formData.get("aimsCompetitionName") || "").trim()
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -157,6 +158,7 @@ export async function createContest(formData: FormData) {
     sponsorLogoUrl: sponsorLogoUrl || null,
     allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
     dataSource,
+    aimsCompetitionName: aimsCompetitionName || null,
     winnerType,
     requireEmail,
     status: "upcoming",
@@ -186,6 +188,7 @@ export async function updateContest(id: number, formData: FormData) {
   const dataSource = normalizeDataSource(formData.get("dataSource"))
   const winnerType = normalizeContestWinnerType(formData.get("winnerType"))
   const requireEmail = formData.get("requireEmail") != null
+  const aimsCompetitionName = String(formData.get("aimsCompetitionName") || "").trim()
 
   if (!name || !startDate || !endDate) {
     return { ok: false as const, error: "Name, start date and end date are required" }
@@ -223,6 +226,7 @@ export async function updateContest(id: number, formData: FormData) {
       sponsorLogoUrl: sponsorLogoUrl || null,
       allowedBrokers: allowedBrokers.length ? allowedBrokers : null,
       dataSource,
+      aimsCompetitionName: aimsCompetitionName || null,
       winnerType,
       requireEmail,
     })
@@ -658,6 +662,10 @@ export async function syncContest(
 
   let synced = 0
   let pending = 0
+  // AIMS-only breakdown of the pending rows (see syncViaAimsRanking): how many
+  // are in the feed but awaiting live results vs. not in the feed at all.
+  let matchedNoResult = 0
+  let notInFeed = 0
   // The most relevant provisioning failure, surfaced to the admin so a
   // "cannot sync" is explained instead of silently counted as pending.
   let provisionError: string | null = null
@@ -673,6 +681,8 @@ export async function syncContest(
     } else {
       synced += r.synced
       pending += r.pending ?? 0
+      matchedNoResult += r.matchedNoResult ?? 0
+      notInFeed += r.notInFeed ?? 0
       if (r.warning) provisionError = r.warning
     }
   }
@@ -686,7 +696,14 @@ export async function syncContest(
       revalidatePath(`/embed/${c.slug}`)
       revalidatePath(`/contests/${c.slug}`)
     }
-    return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
+    return {
+      ok: true as const,
+      synced,
+      pending,
+      matchedNoResult,
+      notInFeed,
+      warning: provisionError ?? undefined,
+    }
   }
 
   if (!isMetaApiConfigured()) {
@@ -794,7 +811,14 @@ export async function syncContest(
     revalidatePath(`/embed/${c.slug}`)
     revalidatePath(`/contests/${c.slug}`)
   }
-  return { ok: true as const, synced, pending, warning: provisionError ?? undefined }
+  return {
+    ok: true as const,
+    synced,
+    pending,
+    matchedNoResult,
+    notInFeed,
+    warning: provisionError ?? undefined,
+  }
 }
 
 /**
@@ -831,13 +855,14 @@ async function syncViaAimsRanking(
   let rawContestantCount = 0
   try {
     const res = await fetchContestantMetrics({
-      competitionFrom: lower,
-      competitionTo: upper,
-      resultFrom: lower,
-      resultTo: upper,
-    })
-    byMt4Id = res.byMt4Id
-    rawContestantCount = res.rawContestantCount
+  competitionFrom: lower,
+  competitionTo: upper,
+  resultFrom: lower,
+  resultTo: upper,
+  competitionName: c.aimsCompetitionName ?? undefined,
+  })
+  byMt4Id = res.byMt4Id
+  rawContestantCount = res.rawContestantCount
   } catch (e) {
     console.log("[v0] AIMSranking fetch failed:", (e as Error).message)
     return { ok: false as const, synced: 0, error: `AIMS Ranking sync failed: ${(e as Error).message}` }
@@ -857,11 +882,17 @@ async function syncViaAimsRanking(
 
   let synced = 0
   let pending = 0
+  // Split the "pending" reasons so the UI can tell the admin what's actually
+  // going on: an account that IS in the feed but has no live results yet is very
+  // different from one whose MT4 ID isn't in the feed at all.
+  let matchedNoResult = 0
+  let notInFeed = 0
   for (const p of rows) {
     const m = byMt4Id.get(p.accountLogin.trim())
     if (!m) {
       // Contestant not found in the AIMS feed yet (not approved / no results).
       pending++
+      notInFeed++
       continue
     }
     if (!m.hasResult) {
@@ -869,6 +900,7 @@ async function syncViaAimsRanking(
       // "-"). Writing them would produce a bogus -100% gain, so leave pending
       // until AIMS posts real trading results.
       pending++
+      matchedNoResult++
       continue
     }
 
@@ -910,7 +942,14 @@ async function syncViaAimsRanking(
 
   revalidatePath("/admin")
   revalidatePath(`/admin/contests/${contestId}`)
-  return { ok: true as const, synced, pending, warning: undefined as string | undefined }
+  return {
+    ok: true as const,
+    synced,
+    pending,
+    matchedNoResult,
+    notInFeed,
+    warning: undefined as string | undefined,
+  }
 }
 
 /**
@@ -1003,13 +1042,14 @@ export async function compareContestSources(contestId: number) {
     const lower = new Date(Math.min(start.getTime(), now.getTime()) - 365 * DAY)
     const upper = new Date(now.getTime() + 365 * DAY)
     try {
-      const res = await fetchContestantMetrics({
-        competitionFrom: lower,
-        competitionTo: upper,
-        resultFrom: lower,
-        resultTo: upper,
-      })
-      aimsById = res.byMt4Id
+    const res = await fetchContestantMetrics({
+  competitionFrom: lower,
+  competitionTo: upper,
+  resultFrom: lower,
+  resultTo: upper,
+  competitionName: c.aimsCompetitionName ?? undefined,
+  })
+  aimsById = res.byMt4Id
     } catch (e) {
       aimsError = `AIMS fetch failed: ${(e as Error).message}`
     }
