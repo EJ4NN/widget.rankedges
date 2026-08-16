@@ -16,6 +16,7 @@ export type MobileRow = {
   avatarUrl: string | null
   status: string
   trades: number | null
+  lastSyncedAt?: string | Date | null
   primary: MobileCell | null
   details: MobileCell[]
 }
@@ -73,7 +74,9 @@ function MobileStandingRow({ row }: { row: MobileRow }) {
           ) : row.accountLogin ? (
             <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
           ) : row.status === "pending" ? (
-            <p className="text-[10px] text-muted-foreground">Awaiting verification</p>
+            <p className="text-[10px] text-muted-foreground">
+              {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}
+            </p>
           ) : (
             <p className="font-mono text-[10px] text-muted-foreground">{row.trades ?? 0} trades</p>
           )}

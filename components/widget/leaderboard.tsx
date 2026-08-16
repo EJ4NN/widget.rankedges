@@ -34,6 +34,7 @@ type Row = {
   withdrawals: string | null
   trades: number | null
   winRate: string | null
+  lastSyncedAt?: string | Date | null
 }
 
 const PODIUM = [
@@ -94,7 +95,9 @@ function TraderIdentity({ row, columns }: { row: Row; columns: LeaderboardColumn
       {columns.account && row.accountLogin ? (
         <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
       ) : row.status === "pending" ? (
-        <p className="text-[10px] text-muted-foreground">Awaiting verification</p>
+        <p className="text-[10px] text-muted-foreground">
+          {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}
+        </p>
       ) : (
         <p className="font-mono text-[10px] text-muted-foreground">{row.trades ?? 0} trades</p>
       )}
@@ -219,6 +222,7 @@ export function Leaderboard({
       avatarUrl: r.avatarUrl,
       status: r.status,
       trades: r.trades,
+      lastSyncedAt: r.lastSyncedAt ?? null,
       primary: primaryCell
         ? { label: primaryKey ? COLUMN_LABELS[primaryKey] : "", text: primaryCell.text, className: metricClass(primaryCell) }
         : null,
