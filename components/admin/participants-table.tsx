@@ -470,10 +470,19 @@ export function ParticipantsTable({
                       ) : null}
                       {contestIsAims ? (
                         p.lastSyncedAt ? (
-                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-sans text-[10px] font-medium text-primary">
-                            <CheckCircle2 className="h-3 w-3" />
-                            In AIMS feed
-                          </span>
+                          Number(p.currentEquity) === 0 && Number(p.lots) === 0 ? (
+                            // Matched in the AIMS feed but no trading results yet
+                            // (competition not started / results not posted).
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-sans text-[10px] font-medium text-primary">
+                              <CheckCircle2 className="h-3 w-3" />
+                              In feed · awaiting results
+                            </span>
+                          ) : (
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-sans text-[10px] font-medium text-primary">
+                              <CheckCircle2 className="h-3 w-3" />
+                              In AIMS feed
+                            </span>
+                          )
                         ) : (
                           <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 font-sans text-[10px] font-medium text-warning">
                             <Clock className="h-3 w-3" />
