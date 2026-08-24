@@ -95,6 +95,7 @@ export async function getLeaderboard(
       avatarUrl: participant.avatarUrl,
       realName: participant.realName,
       accountLogin: participant.accountLogin,
+      platform: participant.platform,
       startingBalance: participant.startingBalance,
       currentBalance: participant.currentBalance,
       currentEquity: participant.currentEquity,
@@ -138,6 +139,8 @@ export async function getLeaderboard(
     ...r,
     realName: columns?.realName ? r.realName : null,
     accountLogin: columns?.account ? r.accountLogin : null,
+    // Platform (MT4/MT5) is shown alongside the account, so tie it to the same toggle.
+    platform: columns?.account ? r.platform : null,
   }))
 }
 

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { ChevronDown, TrendingDown } from "lucide-react"
+import { formatAccountLabel } from "@/lib/format"
 
 export type MobileCell = { label: string; text: string; className: string; warn?: boolean }
 
@@ -13,6 +14,7 @@ export type MobileRow = {
   nickname: string
   realName?: string | null
   accountLogin?: string | null
+  platform?: string | null
   avatarUrl: string | null
   status: string
   trades: number | null
@@ -72,7 +74,9 @@ function MobileStandingRow({ row }: { row: MobileRow }) {
           {row.realName ? (
             <p className="truncate text-[10px] text-muted-foreground">{row.realName}</p>
           ) : row.accountLogin ? (
-            <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
+            <p className="truncate font-mono text-[10px] text-muted-foreground">
+              {formatAccountLabel(row.accountLogin, row.platform)}
+            </p>
           ) : row.status === "pending" ? (
             <p className="text-[10px] text-muted-foreground">
               {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}

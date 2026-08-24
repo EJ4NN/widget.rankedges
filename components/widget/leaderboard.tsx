@@ -1,4 +1,4 @@
-import { formatLots, formatMoney, formatMoneyCompact, formatPct, formatPctPlain } from "@/lib/format"
+import { formatAccountLabel, formatLots, formatMoney, formatMoneyCompact, formatPct, formatPctPlain } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { MobileStandings, type MobileRow } from "@/components/widget/mobile-standings"
@@ -20,6 +20,7 @@ type Row = {
   avatarUrl: string | null
   realName?: string | null
   accountLogin?: string | null
+  platform?: string | null
   startingBalance: string | null
   currentBalance: string | null
   currentEquity: string | null
@@ -93,7 +94,9 @@ function TraderIdentity({ row, columns }: { row: Row; columns: LeaderboardColumn
         <p className="truncate text-[10px] text-muted-foreground">{row.realName}</p>
       ) : null}
       {columns.account && row.accountLogin ? (
-        <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
+        <p className="truncate font-mono text-[10px] text-muted-foreground">
+          {formatAccountLabel(row.accountLogin, row.platform)}
+        </p>
       ) : row.status === "pending" ? (
         <p className="text-[10px] text-muted-foreground">
           {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}
@@ -141,7 +144,9 @@ function PodiumCard({
         <p className="max-w-full truncate text-xs text-muted-foreground">{row.realName}</p>
       ) : null}
       {columns.account && row.accountLogin ? (
-        <p className="max-w-full truncate font-mono text-[11px] text-muted-foreground">#{row.accountLogin}</p>
+        <p className="max-w-full truncate font-mono text-[11px] text-muted-foreground">
+          {formatAccountLabel(row.accountLogin, row.platform)}
+        </p>
       ) : null}
       {primary ? (
         <p className={cn("mt-1 font-mono text-2xl font-bold tabular-nums", metricClass(primary))}>{primary.text}</p>
@@ -219,6 +224,7 @@ export function Leaderboard({
       nickname: r.nickname,
       realName: columns.realName ? (r.realName ?? null) : null,
       accountLogin: columns.account ? (r.accountLogin ?? null) : null,
+      platform: columns.account ? (r.platform ?? null) : null,
       avatarUrl: r.avatarUrl,
       status: r.status,
       trades: r.trades,
