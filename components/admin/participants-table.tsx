@@ -42,7 +42,7 @@ import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { AddParticipantDialog } from "@/components/admin/add-participant-dialog"
 import { toast } from "sonner"
-import { CheckCircle2, Clock, Download, Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
+import { CheckCircle2, Clock, Download, Eye, EyeOff, FileSpreadsheet, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 type BatchOption = { id: number; name: string }
@@ -353,6 +353,19 @@ export function ParticipantsTable({
               >
                 <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
                 Sync selected ({selected.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                nativeButton={false}
+                render={
+                  <a
+                    href={`/admin/contests/${contestId}/full-export?ids=${Array.from(selected).join(",")}`}
+                  />
+                }
+              >
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                Export data ({selected.size})
               </Button>
             </>
           )}
