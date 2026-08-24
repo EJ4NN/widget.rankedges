@@ -517,6 +517,16 @@ export async function setParticipantStatus(id: number, status: string) {
   revalidatePath("/admin")
 }
 
+export async function setParticipantsStatus(ids: number[], status: string) {
+  await requireAdmin()
+  if (ids.length === 0) return { ok: false as const, updated: 0 }
+  // Ensure the caller can manage every participant's contest before updating.
+  await Promise.all(ids.map((id) => assertCanManageParticipant(id)))
+  await db.update(participant).set({ status }).where(inArray(participant.id, ids))
+  revalidatePath("/admin")
+  return { ok: true as const, updated: ids.length }
+}
+
 export async function deleteParticipant(id: number) {
   await assertCanManageParticipant(id)
   await db.delete(participant).where(eq(participant.id, id))

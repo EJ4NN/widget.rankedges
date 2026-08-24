@@ -30,6 +30,7 @@ import {
   deleteParticipant,
   deleteParticipants,
   setParticipantStatus,
+  setParticipantsStatus,
   syncContest,
   setParticipantBatch,
   setParticipantDataSource,
@@ -41,7 +42,7 @@ import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { AddParticipantDialog } from "@/components/admin/add-participant-dialog"
 import { toast } from "sonner"
-import { CheckCircle2, Clock, Download, Eye, EyeOff, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
+import { CheckCircle2, Clock, Download, Eye, EyeOff, FileSpreadsheet, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 type BatchOption = { id: number; name: string }
@@ -210,6 +211,22 @@ export function ParticipantsTable({
     void runSync(false, Array.from(selected))
   }
 
+  function handleBulkStatus(status: string | null) {
+    if (!status) return
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    startTransition(async () => {
+      const res = await setParticipantsStatus(ids, status)
+      if (res.ok) {
+        toast.success(`Updated ${res.updated} participant(s) to ${status}`)
+        setSelected(new Set())
+        router.refresh()
+      } else {
+        toast.error("Nothing to update")
+      }
+    })
+  }
+
   async function handleBulkDelete() {
     if (!confirmDelete) return
     setDeleting(true)
@@ -316,15 +333,41 @@ export function ParticipantsTable({
             {autoSync ? "Auto-sync on" : "Auto-sync off"}
           </Button>
           {selected.size > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleSyncSelected}
-              disabled={syncing || !canSync}
-            >
-              <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
-              Sync selected ({selected.size})
-            </Button>
+            <>
+              <Select value="" onValueChange={handleBulkStatus} disabled={pending}>
+                <SelectTrigger className="h-8 w-44" aria-label="Set status for selected">
+                  <SelectValue placeholder={`Set status (${selected.size})`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Set to Active</SelectItem>
+                  <SelectItem value="pending">Set to Pending</SelectItem>
+                  <SelectItem value="rejected">Set to Rejected</SelectItem>
+                  <SelectItem value="disqualified">Set to Disqualified</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleSyncSelected}
+                disabled={syncing || !canSync}
+              >
+                <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
+                Sync selected ({selected.size})
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                nativeButton={false}
+                render={
+                  <a
+                    href={`/admin/contests/${contestId}/full-export?ids=${Array.from(selected).join(",")}`}
+                  />
+                }
+              >
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                Export data ({selected.size})
+              </Button>
+            </>
           )}
           <Button size="sm" onClick={handleSync} disabled={syncing || !canSync}>
             <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
@@ -411,7 +454,12 @@ export function ParticipantsTable({
             </TableHeader>
             <TableBody>
               {participants.map((p) => {
-                const pct = Number((displayIsAims ? p.rankEdgesGain : p.gain) ?? 0)
+                // For MetaAPI accounts, show absolute gain (simple % on deposited
+                // capital) to match the public portal — MetaStats' time-weighted
+                // gain can be wildly misleading when an account has a large
+                // mid-contest drawdown despite being profitable
+                // (e.g. Danny: -89.91% vs +29.46%). AIMS accounts use rankEdgesGain.
+                const pct = Number((displayIsAims ? p.rankEdgesGain : p.absoluteGain) ?? 0)
                 return (
                   <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
                     <TableCell>
@@ -573,7 +621,7 @@ export function ParticipantsTable({
                       <span className="text-foreground">{p.trades ?? 0}</span>
                       <div className="text-muted-foreground">{formatPctPlain(p.winRate)}</div>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground" suppressHydrationWarning>
+                    <TableCell className="text-xs text-muted-foreground">
                       {mounted ? formatDateTime(p.lastSyncedAt) : "—"}
                     </TableCell>
                     <TableCell>
