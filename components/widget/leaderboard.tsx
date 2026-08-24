@@ -1,4 +1,4 @@
-import { formatAccountLabel, formatLots, formatMoney, formatMoneyCompact, formatPct, formatPctPlain } from "@/lib/format"
+import { formatLots, formatMoney, formatMoneyCompact, formatPct, formatPctPlain } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { MobileStandings, type MobileRow } from "@/components/widget/mobile-standings"
@@ -94,9 +94,7 @@ function TraderIdentity({ row, columns }: { row: Row; columns: LeaderboardColumn
         <p className="truncate text-[10px] text-muted-foreground">{row.realName}</p>
       ) : null}
       {columns.account && row.accountLogin ? (
-        <p className="truncate font-mono text-[10px] text-muted-foreground">
-          {formatAccountLabel(row.accountLogin, row.platform)}
-        </p>
+        <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
       ) : row.status === "pending" ? (
         <p className="text-[10px] text-muted-foreground">
           {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}
@@ -144,9 +142,7 @@ function PodiumCard({
         <p className="max-w-full truncate text-xs text-muted-foreground">{row.realName}</p>
       ) : null}
       {columns.account && row.accountLogin ? (
-        <p className="max-w-full truncate font-mono text-[11px] text-muted-foreground">
-          {formatAccountLabel(row.accountLogin, row.platform)}
-        </p>
+        <p className="max-w-full truncate font-mono text-[11px] text-muted-foreground">#{row.accountLogin}</p>
       ) : null}
       {columns.accountType && row.platform ? (
         <span className="mt-1 inline-flex rounded-md border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
