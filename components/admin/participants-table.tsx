@@ -18,7 +18,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { deleteParticipant, setParticipantStatus, syncContest, setParticipantBatch } from "@/app/actions/admin"
+import {
+  deleteParticipant,
+  setParticipantStatus,
+  setParticipantsStatus,
+  syncContest,
+  setParticipantBatch,
+} from "@/app/actions/admin"
 import { formatLots, formatMoney, formatPct, formatPctPlain, formatDateTime } from "@/lib/format"
 import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
@@ -119,6 +125,21 @@ export function ParticipantsTable({
     void runSync(false, Array.from(selected))
   }
 
+  function handleBulkStatus(status: string) {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    startTransition(async () => {
+      const res = await setParticipantsStatus(ids, status)
+      if (res.ok) {
+        toast.success(`Updated ${res.updated} participant(s) to ${status}`)
+        setSelected(new Set())
+        router.refresh()
+      } else {
+        toast.error("Nothing to update")
+      }
+    })
+  }
+
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -145,15 +166,28 @@ export function ParticipantsTable({
             {autoSync ? "Auto-sync on" : "Auto-sync off"}
           </Button>
           {selected.size > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleSyncSelected}
-              disabled={syncing || !metaApiConfigured}
-            >
-              <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
-              Sync selected ({selected.size})
-            </Button>
+            <>
+              <Select value="" onValueChange={handleBulkStatus} disabled={pending}>
+                <SelectTrigger className="h-8 w-44" aria-label="Set status for selected">
+                  <SelectValue placeholder={`Set status (${selected.size})`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Set to Active</SelectItem>
+                  <SelectItem value="pending">Set to Pending</SelectItem>
+                  <SelectItem value="rejected">Set to Rejected</SelectItem>
+                  <SelectItem value="disqualified">Set to Disqualified</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleSyncSelected}
+                disabled={syncing || !metaApiConfigured}
+              >
+                <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />
+                Sync selected ({selected.size})
+              </Button>
+            </>
           )}
           <Button size="sm" onClick={handleSync} disabled={syncing || !metaApiConfigured}>
             <RefreshCw className={"mr-1.5 h-4 w-4 " + (syncing ? "animate-spin" : "")} />

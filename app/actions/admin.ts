@@ -3,7 +3,7 @@
 import { db } from "@/lib/db"
 import { brokerServer, contest, participant, batch, setting } from "@/lib/db/schema"
 import { requireAdmin } from "@/lib/get-session"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { getAccountMetrics, isMetaApiConfigured, provisionAccount } from "@/lib/metaapi"
 import { put } from "@vercel/blob"
@@ -390,6 +390,14 @@ export async function setParticipantStatus(id: number, status: string) {
   await requireAdmin()
   await db.update(participant).set({ status }).where(eq(participant.id, id))
   revalidatePath("/admin")
+}
+
+export async function setParticipantsStatus(ids: number[], status: string) {
+  await requireAdmin()
+  if (ids.length === 0) return { ok: false as const, updated: 0 }
+  await db.update(participant).set({ status }).where(inArray(participant.id, ids))
+  revalidatePath("/admin")
+  return { ok: true as const, updated: ids.length }
 }
 
 export async function deleteParticipant(id: number) {
