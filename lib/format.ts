@@ -1,3 +1,9 @@
+/** Trading account label, e.g. "MT5 #520872" — or "#520872" when platform is unknown. */
+export function formatAccountLabel(login: string, platform?: string | null): string {
+  const p = platform?.trim().toUpperCase()
+  return p ? `${p} #${login}` : `#${login}`
+}
+
 export function formatMoney(value: string | number | null | undefined) {
   const n = Number(value ?? 0)
   return n.toLocaleString("en-US", {
