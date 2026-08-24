@@ -66,7 +66,7 @@ export async function getAllowedBrokers(contestId: number) {
  */
 export async function getLeaderboard(
   contestId: number,
-  columns?: Partial<Pick<LeaderboardColumns, "realName" | "account">>,
+  columns?: Partial<Pick<LeaderboardColumns, "realName" | "account" | "accountType">>,
   opts?: { batchId?: number | null; winnerType?: WinnerType },
 ) {
   const winnerType = normalizeWinnerType(opts?.winnerType)
@@ -139,8 +139,9 @@ export async function getLeaderboard(
     ...r,
     realName: columns?.realName ? r.realName : null,
     accountLogin: columns?.account ? r.accountLogin : null,
-    // Platform (MT4/MT5) is shown alongside the account, so tie it to the same toggle.
-    platform: columns?.account ? r.platform : null,
+    // Platform (MT4/MT5) powers both the inline account prefix and the dedicated
+    // Type column, so expose it whenever either toggle is on.
+    platform: columns?.account || columns?.accountType ? r.platform : null,
   }))
 }
 
