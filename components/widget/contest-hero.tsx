@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Countdown } from "@/components/widget/countdown"
 import { JoinDialog } from "@/components/widget/join-dialog"
-import { formatDate, formatMoney } from "@/lib/format"
+import { formatDateTimeFull, formatMoney } from "@/lib/format"
 import type { Contest } from "@/lib/db/schema"
 import { Calendar, Trophy, Users, Wallet } from "lucide-react"
 
@@ -43,7 +43,7 @@ export function ContestHero({
     {
       icon: Calendar,
       label: "Dates",
-      value: `${formatDate(contest.startDate)} – ${formatDate(contest.endDate)}`,
+      value: `${formatDateTimeFull(contest.startDate, contest.timeZone)} – ${formatDateTimeFull(contest.endDate, contest.timeZone)}`,
     },
   ]
 
@@ -97,12 +97,20 @@ export function ContestHero({
       </div>
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <JoinDialog contestId={contest.id} contestSlug={contest.slug} disabled={isEnded} />
+        <JoinDialog
+          contestId={contest.id}
+          contestSlug={contest.slug}
+          dataSource={contest.dataSource}
+          requireEmail={contest.requireEmail}
+          disabled={isEnded}
+        />
         {isEnded ? (
           <p className="text-sm text-muted-foreground">This contest has ended.</p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Free to enter. Connect your MT4/MT5 account to compete.
+            {contest.dataSource === "aimsranking"
+              ? "Free to enter. Add your MT4 login to compete."
+              : "Free to enter. Connect your MT4/MT5 account to compete."}
           </p>
         )}
       </div>

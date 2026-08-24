@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { createBatch, updateBatch, deleteBatch } from "@/app/actions/admin"
-import { toDateTimeLocal, formatDate } from "@/lib/format"
+import { toDateTimeLocal, fromDateTimeLocal, formatDate } from "@/lib/format"
 import { WINNER_TYPES, WINNER_TYPE_LABELS, WINNER_TYPE_SHORT, type WinnerType } from "@/lib/winner-type"
 import type { Batch } from "@/lib/db/schema"
 import { toast } from "sonner"
@@ -36,6 +36,12 @@ function BatchForm({
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("winnerType", winnerType)
+    // Convert wall-clock datetime-local values to UTC ISO using the browser's
+    // timezone so the server stores the correct instant (see fromDateTimeLocal).
+    for (const field of ["startDate", "endDate"] as const) {
+      const raw = String(formData.get(field) || "")
+      if (raw) formData.set(field, fromDateTimeLocal(raw))
+    }
 
     setLoading(true)
     const res = batch ? await updateBatch(batch.id, formData) : await createBatch(contestId, formData)
@@ -81,7 +87,7 @@ function BatchForm({
 
       <div className="flex flex-col gap-2">
         <Label>Winner determined by</Label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {WINNER_TYPES.map((t) => (
             <button
               key={t}

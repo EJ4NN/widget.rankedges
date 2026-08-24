@@ -27,12 +27,14 @@ type Row = {
   profitPct: string | null
   gain: string | null
   absoluteGain: string | null
+  rankEdgesGain: string | null
   lots: string | null
   maxDrawdown: string | null
   deposits: string | null
   withdrawals: string | null
   trades: number | null
   winRate: string | null
+  lastSyncedAt?: string | Date | null
 }
 
 const PODIUM = [
@@ -57,6 +59,10 @@ function metricValue(r: Row, key: NumericColumnKey): MetricCell {
     }
     case "absoluteGain": {
       const n = Number(r.absoluteGain ?? 0)
+      return { text: formatPct(n), positive: n >= 0 }
+    }
+    case "rankEdgesGain": {
+      const n = Number(r.rankEdgesGain ?? 0)
       return { text: formatPct(n), positive: n >= 0 }
     }
     case "lots":
@@ -89,7 +95,9 @@ function TraderIdentity({ row, columns }: { row: Row; columns: LeaderboardColumn
       {columns.account && row.accountLogin ? (
         <p className="truncate font-mono text-[10px] text-muted-foreground">#{row.accountLogin}</p>
       ) : row.status === "pending" ? (
-        <p className="text-[10px] text-muted-foreground">Awaiting verification</p>
+        <p className="text-[10px] text-muted-foreground">
+          {row.lastSyncedAt ? "Registered · awaiting results" : "Awaiting verification"}
+        </p>
       ) : (
         <p className="font-mono text-[10px] text-muted-foreground">{row.trades ?? 0} trades</p>
       )}
@@ -145,45 +153,6 @@ function PodiumCard({
             return <Stat key={key} label={COLUMN_LABELS[key]} value={cell.text} tone={cell.warn ? "warn" : undefined} />
           })}
         </div>
-      ) : null}
-    </div>
-  )
-}
-
-/** Compact runner-up row for mobile (no heavy card) — rank badge + avatar + name + headline gain. */
-function PodiumMiniRow({
-  row,
-  place,
-  columns,
-  primaryKey,
-}: {
-  row: Row
-  place: 1 | 2
-  columns: LeaderboardColumns
-  primaryKey: NumericColumnKey | null
-}) {
-  const cfg = PODIUM[place]
-  const Icon = cfg.icon
-  const primary = primaryKey ? metricValue(row, primaryKey) : null
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-secondary/25 px-4 py-3">
-      <span className={cn("flex items-center gap-1 font-mono text-xs font-bold tabular-nums", cfg.accent)}>
-        <Icon className="h-4 w-4" aria-hidden />
-        {place + 1}
-      </span>
-      <TraderAvatar nickname={row.nickname} src={row.avatarUrl} size={40} ring={cfg.ring} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-display text-sm font-bold uppercase tracking-wide text-foreground">
-          {row.nickname}
-        </p>
-        {columns.realName && row.realName ? (
-          <p className="truncate text-[11px] text-muted-foreground">{row.realName}</p>
-        ) : null}
-      </div>
-      {primary ? (
-        <p className={cn("shrink-0 font-mono text-base font-bold tabular-nums", metricClass(primary))}>
-          {primary.text}
-        </p>
       ) : null}
     </div>
   )
@@ -253,6 +222,7 @@ export function Leaderboard({
       avatarUrl: r.avatarUrl,
       status: r.status,
       trades: r.trades,
+      lastSyncedAt: r.lastSyncedAt ?? null,
       primary: primaryCell
         ? { label: primaryKey ? COLUMN_LABELS[primaryKey] : "", text: primaryCell.text, className: metricClass(primaryCell) }
         : null,
@@ -265,8 +235,8 @@ export function Leaderboard({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Podium — desktop: 2nd · 1st · 3rd with 1st raised and centered */}
-      <div className="hidden gap-4 sm:grid sm:grid-cols-3 sm:items-end">
+      {/* Podium — large screens only (hidden on mobile/tablet); the standings list covers top ranks there */}
+      <div className="hidden gap-4 lg:grid lg:grid-cols-3 lg:items-end">
         {podiumOrder.map(({ row, place }) => (
           <PodiumCard
             key={row.id}
@@ -279,18 +249,7 @@ export function Leaderboard({
         ))}
       </div>
 
-      {/* Podium — mobile: champion #1 spotlighted on top, runners-up as compact rows */}
-      <div className="flex flex-col gap-3 sm:hidden">
-        {top3[0] ? (
-          <PodiumCard row={top3[0]} place={0} columns={columns} primaryKey={primaryKey} subKeys={subKeys} />
-        ) : null}
-        {top3[1] ? (
-          <PodiumMiniRow row={top3[1]} place={1} columns={columns} primaryKey={primaryKey} />
-        ) : null}
-        {top3[2] ? (
-          <PodiumMiniRow row={top3[2]} place={2} columns={columns} primaryKey={primaryKey} />
-        ) : null}
-      </div>
+      {/* Podium is desktop-only; on mobile the full standings list below covers the top ranks. */}
 
       {/* Full standings — rounded capsules with a staggered entrance */}
       {/* Mobile: compact rows (rank + trader + headline metric), tap to reveal the rest */}
@@ -369,7 +328,7 @@ export function Leaderboard({
                         key={key}
                         className={cn(
                           "text-right font-mono tabular-nums",
-                          key === "gain" ? "font-semibold" : "",
+                          key === "gain" || key === "rankEdgesGain" ? "font-semibold" : "",
                           metricClass(cell),
                         )}
                       >

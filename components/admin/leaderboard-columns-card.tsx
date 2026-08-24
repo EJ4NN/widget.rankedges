@@ -16,6 +16,7 @@ import {
 const METRIC_KEYS: (keyof LeaderboardColumns)[] = [
   "gain",
   "absoluteGain",
+  "rankEdgesGain",
   "lots",
   "equity",
   "deposits",

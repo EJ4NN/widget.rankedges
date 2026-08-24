@@ -3,9 +3,11 @@ import { notFound } from "next/navigation"
 import { db } from "@/lib/db"
 import { contest, brokerServer } from "@/lib/db/schema"
 import { asc, eq } from "drizzle-orm"
-import { requireAdmin } from "@/lib/get-session"
-import { listParticipants, listBatches } from "@/app/actions/admin"
+import { getCurrentAdmin, canManageContest, isMaster } from "@/lib/authz"
+import { listParticipants, listBatches, listContestAccess } from "@/app/actions/admin"
 import { ParticipantsTable } from "@/components/admin/participants-table"
+import { CompareSourcesCard } from "@/components/admin/compare-sources-card"
+import { ContestAccessCard } from "@/components/admin/contest-access-card"
 import { EmbedSnippet } from "@/components/admin/embed-snippet"
 import { LeaderboardColumnsCard } from "@/components/admin/leaderboard-columns-card"
 import { BatchesCard } from "@/components/admin/batches-card"
@@ -22,17 +24,23 @@ export default async function AdminContestPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requireAdmin()
+  const admin = await getCurrentAdmin()
   const { id } = await params
   const contestId = Number(id)
   if (Number.isNaN(contestId)) notFound()
 
+  // A sub-admin may only open a contest they own or were assigned; anything
+  // else 404s so contest ids can't be enumerated.
+  if (!(await canManageContest(admin, contestId))) notFound()
+
   const c = (await db.select().from(contest).where(eq(contest.id, contestId)).limit(1))[0]
   if (!c) notFound()
 
+  const master = isMaster(admin)
   const participants = await listParticipants(contestId)
   const batches = await listBatches(contestId)
   const servers = await db.select().from(brokerServer).orderBy(asc(brokerServer.name))
+  const access = master ? await listContestAccess(contestId) : null
 
   return (
     <div>
@@ -76,6 +84,9 @@ export default async function AdminContestPage({
 
       <ParticipantsTable
         contestId={contestId}
+        contestSlug={c.slug}
+        dataSource={c.dataSource}
+        displaySource={c.displaySource ?? c.dataSource}
         participants={participants}
         metaApiConfigured={isMetaApiConfigured()}
         batches={batches.map((b) => ({ id: b.id, name: b.name }))}
@@ -86,6 +97,16 @@ export default async function AdminContestPage({
           platform: s.platform,
         }))}
       />
+
+      <div className="mt-6">
+        <CompareSourcesCard contestId={contestId} />
+      </div>
+
+      {master && access?.ok && (
+        <div className="mt-6">
+          <ContestAccessCard contestId={contestId} rows={access.rows} />
+        </div>
+      )}
     </div>
   )
 }

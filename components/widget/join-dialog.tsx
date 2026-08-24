@@ -29,13 +29,18 @@ type Server = { id: number; name: string; company: string | null }
 export function JoinDialog({
   contestId,
   contestSlug,
+  dataSource,
+  requireEmail = false,
   disabled,
 }: {
   contestId: number
   contestSlug: string
+  dataSource: string
+  requireEmail?: boolean
   disabled?: boolean
 }) {
   const router = useRouter()
+  const isAims = dataSource === "aimsranking"
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
@@ -46,7 +51,7 @@ export function JoinDialog({
   const [realName, setRealName] = useState("")
   const [email, setEmail] = useState("")
 
-  // step 2
+  // step 2 (MetaAPI only)
   const [platform, setPlatform] = useState<"mt4" | "mt5" | "">("")
   const [servers, setServers] = useState<Server[]>([])
   const [loadingServers, setLoadingServers] = useState(false)
@@ -80,12 +85,18 @@ export function JoinDialog({
   function goToStep2(e: React.FormEvent) {
     e.preventDefault()
     if (!nickname.trim() || !realName.trim()) return
+    if (requireEmail && !email.trim()) {
+      toast.error("Email is required to join this contest")
+      return
+    }
     setStep(2)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!platform || !serverId || !accountLogin.trim() || !investorPassword.trim()) return
+    if (!platform || !serverId || !accountLogin.trim()) return
+    // AIMS Ranking matches by MT4/MT5 ID, so the investor password is optional there.
+    if (!isAims && !investorPassword.trim()) return
     setLoading(true)
     const res = await joinContest({
       contestId,
@@ -127,14 +138,16 @@ export function JoinDialog({
             <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-primary" aria-hidden />
             <DialogTitle className="text-xl">You&apos;re in!</DialogTitle>
             <DialogDescription className="mt-2">
-              Your account has been submitted. Once we verify your trading account, your live stats
-              will appear on the leaderboard.
+              {isAims
+                ? "Your entry is submitted. Once your account is verified, your live stats will appear on the leaderboard."
+                : "Your account has been submitted. Once we verify your trading account, your live stats will appear on the leaderboard."}
             </DialogDescription>
             <Button className="mt-6 w-full" onClick={() => setOpen(false)}>
               Done
             </Button>
           </div>
         ) : (
+          /* ---------- Full two-step account connection (all data sources) ---------- */
           <>
             <DialogHeader>
               <DialogTitle>{step === 1 ? "Enter the contest" : "Connect your account"}</DialogTitle>
@@ -180,13 +193,14 @@ export function JoinDialog({
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email (optional)</Label>
+                  <Label htmlFor="email">Email{requireEmail ? "" : " (optional)"}</Label>
                   <Input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
+                    required={requireEmail}
                     className="h-12"
                   />
                 </div>
@@ -277,19 +291,21 @@ export function JoinDialog({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="investor">Investor password (read-only)</Label>
+                  <Label htmlFor="investor">Investor password (read-only){isAims ? " (optional)" : ""}</Label>
                   <Input
                     id="investor"
                     type="password"
                     value={investorPassword}
                     onChange={(e) => setInvestorPassword(e.target.value)}
                     placeholder="Read-only password"
-                    required
+                    required={!isAims}
                     className="h-12"
                   />
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Lock className="h-3 w-3" aria-hidden />
-                    The investor password only allows viewing — no trading or withdrawals.
+                    {isAims
+                      ? "Optional — AIMS Ranking matches your results by MT4/MT5 ID."
+                      : "The investor password only allows viewing — no trading or withdrawals."}
                   </p>
                 </div>
 

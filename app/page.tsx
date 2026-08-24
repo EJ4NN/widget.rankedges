@@ -77,7 +77,7 @@ export default async function HomePage() {
                 </div>
                 <h2 className="text-lg font-semibold text-foreground">{c.name}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {formatDate(c.startDate)} – {formatDate(c.endDate)}
+                  {formatDate(c.startDate, c.timeZone)} – {formatDate(c.endDate, c.timeZone)}
                 </p>
                 <p className="mt-3 font-mono text-sm text-foreground">
                   {formatMoney(c.startingBalance)}{" "}

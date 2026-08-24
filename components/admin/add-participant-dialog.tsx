@@ -19,29 +19,41 @@ import { Lock, Plus } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 
+type DataSourceChoice = "inherit" | "metaapi" | "aimsranking"
+
 export function AddParticipantDialog({
   contestId,
   servers,
   hasBatches = false,
+  contestDataSource = "metaapi",
 }: {
   contestId: number
   servers: Server[]
   hasBatches?: boolean
+  contestDataSource?: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [platform, setPlatform] = useState<"mt4" | "mt5">("mt5")
+  const [source, setSource] = useState<DataSourceChoice>("inherit")
 
   const serverSuggestions = useMemo(
     () => servers.filter((s) => s.platform === platform),
     [servers, platform],
   )
 
+  // The source this trader actually syncs from (override wins over contest default).
+  const effectiveSource = source === "inherit" ? contestDataSource : source
+  // AIMS Ranking matches by MT4/MT5 ID, so the investor password is optional there.
+  const isAims = effectiveSource === "aimsranking"
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     formData.set("platform", platform)
+    // "inherit" => empty string so the server keeps null (follows contest default).
+    formData.set("dataSource", source === "inherit" ? "" : source)
 
     setLoading(true)
     const res = await addParticipant(contestId, formData)
@@ -52,11 +64,15 @@ export function AddParticipantDialog({
       return
     }
     toast.success("Participant added", {
-      description: res.provisioned
-        ? "MetaAPI account provisioned — stats will sync shortly."
-        : "Added, but MetaAPI provisioning failed. Try syncing later.",
+      description:
+        res.source === "aimsranking"
+          ? "Will be pulled from the AIMS Ranking feed (matched by MT4 ID) on next sync."
+          : res.provisioned
+            ? "MetaAPI account provisioned — stats will sync shortly."
+            : "Added, but MetaAPI provisioning failed. Try syncing later.",
     })
     setOpen(false)
+    setSource("inherit")
     router.refresh()
   }
 
@@ -121,6 +137,40 @@ export function AddParticipantDialog({
           </div>
 
           <div className="flex flex-col gap-2">
+            <Label>Data source</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { key: "inherit", label: "Auto" },
+                  { key: "metaapi", label: "MetaAPI" },
+                  { key: "aimsranking", label: "AIMS" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setSource(opt.key)}
+                  className={
+                    "rounded-lg border px-3 py-2 text-xs font-semibold uppercase transition-colors " +
+                    (source === opt.key
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {source === "inherit"
+                ? `Auto follows the contest default (${contestDataSource === "aimsranking" ? "AIMS Ranking" : "MetaAPI"}).`
+                : source === "aimsranking"
+                  ? "Pulled from the AIMS Ranking feed, matched by MT4 ID — no MetaAPI account is created."
+                  : "Provisioned on MetaAPI for direct live syncing."}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
             <Label htmlFor="serverName">Broker server</Label>
             <Input
               id="serverName"
@@ -150,13 +200,13 @@ export function AddParticipantDialog({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="investorPassword">Investor password</Label>
+              <Label htmlFor="investorPassword">Investor password{isAims ? " (optional)" : ""}</Label>
               <Input
                 id="investorPassword"
                 name="investorPassword"
                 type="password"
-                placeholder="Read-only"
-                required
+                placeholder={isAims ? "Optional for AIMS" : "Read-only"}
+                required={!isAims}
               />
             </div>
           </div>

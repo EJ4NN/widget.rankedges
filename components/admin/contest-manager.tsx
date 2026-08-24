@@ -24,7 +24,7 @@ import {
 import { createContest, deleteContest, updateContest, updateContestStatus } from "@/app/actions/admin"
 import { ImageUploadField } from "@/components/admin/image-upload-field"
 import type { Contest } from "@/lib/db/schema"
-import { formatDate, toDateTimeLocal } from "@/lib/format"
+import { formatDate, toDateTimeLocal, fromDateTimeLocal } from "@/lib/format"
 import { toast } from "sonner"
 import { ExternalLink, Pencil, Plus, Trash2 } from "lucide-react"
 
@@ -40,8 +40,23 @@ function ContestForm({
   brokers: string[]
 }) {
   const allowed = contest?.allowedBrokers ?? []
+
+  // datetime-local values are wall-clock times in the admin's browser timezone.
+  // Convert them to UTC ISO here (client-side) before the server action parses
+  // them, otherwise the server misreads them as UTC and shifts the times.
+  async function handleAction(formData: FormData) {
+    for (const field of ["startDate", "endDate"] as const) {
+      const raw = String(formData.get(field) || "")
+      if (raw) formData.set(field, fromDateTimeLocal(raw))
+    }
+    // Record the admin's IANA timezone so public dates display in the same zone
+    // the organizer entered them in.
+    formData.set("timeZone", Intl.DateTimeFormat().resolvedOptions().timeZone)
+    await onSubmit(formData)
+  }
+
   return (
-    <form action={onSubmit} className="flex flex-col gap-4">
+    <form action={handleAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" placeholder="e.g. Asia Cup 2026" defaultValue={contest?.name} required />
@@ -53,6 +68,19 @@ function ContestForm({
           name="description"
           placeholder="Short tagline"
           defaultValue={contest?.description ?? ""}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="slug">URL slug</Label>
+        <p className="text-xs text-muted-foreground">
+          The contest link: /contests/<span className="font-mono">{"{slug}"}</span>. Leave blank to auto-generate from the
+          name. Changing it will break any previously shared links.
+        </p>
+        <Input
+          id="slug"
+          name="slug"
+          placeholder="e.g. crazii-cup-sg"
+          defaultValue={contest?.slug ?? ""}
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -102,6 +130,73 @@ function ContestForm({
           min="1"
           defaultValue={contest?.maxParticipants ?? ""}
         />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="dataSource">Data source</Label>
+        <p className="text-xs text-muted-foreground">
+          Where live metrics are pulled from when you sync this contest.
+        </p>
+        <select
+          id="dataSource"
+          name="dataSource"
+          defaultValue={contest?.dataSource ?? "metaapi"}
+          className="h-11 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="metaapi">MetaAPI — connect each MT4/MT5 account (investor password)</option>
+          <option value="aimsranking">AIMS Ranking — pull results from the AIMS/AIMSCAP API (by MT4/MT5 ID)</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="aimsCompetitionName">AIMS competition name (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          AIMS Ranking only. Must match the competition name on the AIMS/AIMSCAP feed exactly. Leave blank to match every
+          competition by MT4/MT5 ID. Set it to scope the sync to one competition (avoids MT4 IDs colliding across events).
+        </p>
+        <Input
+          id="aimsCompetitionName"
+          name="aimsCompetitionName"
+          defaultValue={contest?.aimsCompetitionName ?? ""}
+          placeholder={contest?.name ? `e.g. ${contest.name}` : "e.g. AIMS VN CUP"}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="winnerType">Ranking metric</Label>
+        <p className="text-xs text-muted-foreground">
+          How traders are ranked on the leaderboard. AIMS Ranking contests should use RankEdges Gain (REG). (Contests
+          split into batches use each batch&apos;s own metric instead.)
+        </p>
+        <select
+          id="winnerType"
+          name="winnerType"
+          defaultValue={contest?.winnerType ?? "gain"}
+          className="h-11 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="gain">Gain % — broker/AIMS reported return</option>
+          <option value="rankEdgesGain">REG (RankEdges Gain) — profit ÷ deposits</option>
+          <option value="absoluteGain">Absolute gain %</option>
+          <option value="lots">Lots traded (volume)</option>
+        </select>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="requireEmail">Registration</Label>
+        <label
+          htmlFor="requireEmail"
+          className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-secondary/50 px-3 py-3"
+        >
+          <input
+            id="requireEmail"
+            type="checkbox"
+            name="requireEmail"
+            defaultChecked={contest?.requireEmail ?? false}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-foreground">Require email to join</span>
+            <span className="text-xs text-muted-foreground">
+              Entrants must provide a valid email address on the join form.
+            </span>
+          </span>
+        </label>
       </div>
       <div className="flex flex-col gap-2">
         <Label>Eligible brokers</Label>
@@ -165,6 +260,20 @@ function ContestForm({
           defaultValue={contest?.rules ?? ""}
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="faq">FAQ</Label>
+        <textarea
+          id="faq"
+          name="faq"
+          rows={6}
+          placeholder={"Q: How do I join?\nA: Click Join Contest and enter your MT4 ID.\nQ: When does it start?\nA: 17 August 2026."}
+          defaultValue={contest?.faq ?? ""}
+          className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        <p className="text-xs text-muted-foreground">
+          Use alternating {'"Q:"'} and {'"A:"'} lines. The FAQ tab only appears when this is filled in.
+        </p>
       </div>
       <Button type="submit">{submitLabel}</Button>
     </form>
