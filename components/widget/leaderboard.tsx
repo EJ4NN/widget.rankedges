@@ -148,6 +148,11 @@ function PodiumCard({
           {formatAccountLabel(row.accountLogin, row.platform)}
         </p>
       ) : null}
+      {columns.accountType && row.platform ? (
+        <span className="mt-1 inline-flex rounded-md border border-border bg-background/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          {row.platform.toUpperCase()}
+        </span>
+      ) : null}
       {primary ? (
         <p className={cn("mt-1 font-mono text-2xl font-bold tabular-nums", metricClass(primary))}>{primary.text}</p>
       ) : null}
@@ -209,10 +214,12 @@ export function Leaderboard({
   if (top3[0]) podiumOrder.push({ row: top3[0], place: 0 })
   if (top3[2]) podiumOrder.push({ row: top3[2], place: 2 })
 
+  // Optional text column for the trading platform (MT4/MT5), toggled independently.
+  const showType = columns.accountType
   // Give the trader column room and each metric a sensible min so columns never crush;
   // the table scrolls horizontally when there are many enabled columns.
-  const gridTemplate = `2.5rem minmax(9rem,1fr) repeat(${enabledNumeric.length}, minmax(5rem,1fr))`
-  const minWidth = 180 + enabledNumeric.length * 88
+  const gridTemplate = `2.5rem minmax(9rem,1fr) ${showType ? "minmax(3rem,auto) " : ""}repeat(${enabledNumeric.length}, minmax(5rem,1fr))`
+  const minWidth = 180 + (showType ? 64 : 0) + enabledNumeric.length * 88
 
   // Mobile: only rank + trader + headline metric are shown; the rest expand on tap.
   const detailKeys = enabledNumeric.filter((k) => k !== primaryKey)
@@ -225,6 +232,7 @@ export function Leaderboard({
       realName: columns.realName ? (r.realName ?? null) : null,
       accountLogin: columns.account ? (r.accountLogin ?? null) : null,
       platform: columns.account ? (r.platform ?? null) : null,
+      platformType: columns.accountType ? (r.platform ?? null) : null,
       avatarUrl: r.avatarUrl,
       status: r.status,
       trades: r.trades,
@@ -271,6 +279,7 @@ export function Leaderboard({
           >
             <span>#</span>
             <span>Trader</span>
+            {showType ? <span>Type</span> : null}
             {enabledNumeric.map((key) => (
               <span key={key} className="text-right">
                 {COLUMN_LABELS[key]}
@@ -318,6 +327,11 @@ export function Leaderboard({
                     />
                     <TraderIdentity row={r} columns={columns} />
                   </div>
+                  {showType ? (
+                    <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {r.platform ? r.platform.toUpperCase() : "—"}
+                    </span>
+                  ) : null}
                   {enabledNumeric.map((key) => {
                     const cell = metricValue(r, key)
                     const content: ReactNode =

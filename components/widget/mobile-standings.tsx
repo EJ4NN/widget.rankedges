@@ -15,6 +15,7 @@ export type MobileRow = {
   realName?: string | null
   accountLogin?: string | null
   platform?: string | null
+  platformType?: string | null
   avatarUrl: string | null
   status: string
   trades: number | null
@@ -70,7 +71,14 @@ function MobileStandingRow({ row }: { row: MobileRow }) {
           ring={row.rank === 1 ? "accent" : row.rank <= 3 ? "primary" : "none"}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-foreground">{row.nickname}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="truncate font-medium text-foreground">{row.nickname}</p>
+            {row.platformType ? (
+              <span className="shrink-0 rounded border border-border bg-background/40 px-1 py-0.5 font-mono text-[9px] uppercase leading-none tracking-wide text-muted-foreground">
+                {row.platformType.toUpperCase()}
+              </span>
+            ) : null}
+          </div>
           {row.realName ? (
             <p className="truncate text-[10px] text-muted-foreground">{row.realName}</p>
           ) : row.accountLogin ? (

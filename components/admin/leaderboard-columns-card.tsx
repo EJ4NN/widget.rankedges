@@ -23,7 +23,13 @@ const METRIC_KEYS: (keyof LeaderboardColumns)[] = [
   "withdrawals",
   "drawdown",
 ]
-const PRIVATE_KEYS: (keyof LeaderboardColumns)[] = ["realName", "account"]
+const PRIVATE_KEYS: (keyof LeaderboardColumns)[] = ["realName", "account", "accountType"]
+
+const PRIVATE_HINTS: Partial<Record<keyof LeaderboardColumns, string>> = {
+  realName: "Shows trader's real name",
+  account: "Shows MT4/MT5 account number",
+  accountType: "Shows MT4/MT5 platform as its own column",
+}
 
 function Toggle({
   label,
@@ -123,7 +129,7 @@ export function LeaderboardColumnsCard({
             label={COLUMN_LABELS[key]}
             checked={cols[key]}
             onToggle={() => toggle(key)}
-            hint={key === "realName" ? "Shows trader's real name" : "Shows MT4/MT5 account number"}
+            hint={PRIVATE_HINTS[key]}
           />
         ))}
       </div>

@@ -9,6 +9,7 @@ export type LeaderboardColumns = {
   drawdown: boolean
   realName: boolean
   account: boolean
+  accountType: boolean
 }
 
 // What the public leaderboard shows out of the box. Private identity fields
@@ -25,6 +26,7 @@ export const DEFAULT_LEADERBOARD_COLUMNS: LeaderboardColumns = {
   drawdown: true,
   realName: false,
   account: false,
+  accountType: false,
 }
 
 // Numeric stat columns rendered in the standings table / podium, in display order.
@@ -52,6 +54,7 @@ export const COLUMN_LABELS: Record<keyof LeaderboardColumns, string> = {
   drawdown: "Drawdown",
   realName: "Real name",
   account: "Account no.",
+  accountType: "Type",
 }
 
 // Merge a stored (possibly partial / null) config with defaults so older
