@@ -30,6 +30,7 @@ import {
   deleteParticipant,
   deleteParticipants,
   setParticipantStatus,
+  setParticipantNickname,
   setParticipantsStatus,
   syncContest,
   setParticipantBatch,
@@ -42,7 +43,7 @@ import type { Participant } from "@/lib/db/schema"
 import { TraderAvatar } from "@/components/widget/trader-avatar"
 import { AddParticipantDialog } from "@/components/admin/add-participant-dialog"
 import { toast } from "sonner"
-import { CheckCircle2, Clock, Download, Eye, EyeOff, FileSpreadsheet, Pause, Play, RefreshCw, Trash2 } from "lucide-react"
+import { Check, CheckCircle2, Clock, Download, Eye, EyeOff, FileSpreadsheet, Pause, Pencil, Play, RefreshCw, Trash2, X } from "lucide-react"
 
 type Server = { id: number; name: string; company: string | null; platform: string }
 type BatchOption = { id: number; name: string }
@@ -85,6 +86,9 @@ export function ParticipantsTable({
   // With the source selector, allow syncing whenever either path is usable.
   const canSync = contestIsAims || metaApiConfigured
   const [reveal, setReveal] = useState<Record<number, boolean>>({})
+  // Inline nickname editing: which participant is being renamed + the draft value.
+  const [editingNick, setEditingNick] = useState<number | null>(null)
+  const [nickDraft, setNickDraft] = useState("")
   const [selected, setSelected] = useState<Set<number>>(new Set())
   // Bulk-delete confirmation: "selected" removes the checked rows, "all" wipes
   // every participant in the contest. null = dialog closed.
@@ -209,6 +213,34 @@ export function ParticipantsTable({
   function handleSyncSelected() {
     if (selected.size === 0) return
     void runSync(false, Array.from(selected))
+  }
+
+  function startEditNick(id: number, current: string) {
+    setEditingNick(id)
+    setNickDraft(current)
+  }
+
+  function cancelEditNick() {
+    setEditingNick(null)
+    setNickDraft("")
+  }
+
+  function saveNick(id: number, original: string) {
+    const next = nickDraft.trim()
+    if (!next || next === original) {
+      cancelEditNick()
+      return
+    }
+    startTransition(async () => {
+      const res = await setParticipantNickname(id, next)
+      if (res.ok) {
+        toast.success("Nickname updated")
+        cancelEditNick()
+        router.refresh()
+      } else {
+        toast.error(res.error ?? "Could not update nickname")
+      }
+    })
   }
 
   function handleBulkStatus(status: string | null) {
@@ -474,7 +506,52 @@ export function ParticipantsTable({
                     <TableCell className="font-medium text-foreground">
                       <div className="flex items-center gap-2">
                         <TraderAvatar nickname={p.nickname} src={p.avatarUrl} size={28} ring="none" />
-                        {p.nickname}
+                        {editingNick === p.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              autoFocus
+                              value={nickDraft}
+                              onChange={(e) => setNickDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                                if (e.key === "Enter") saveNick(p.id, p.nickname)
+                                else if (e.key === "Escape") cancelEditNick()
+                              }}
+                              maxLength={60}
+                              aria-label={`Edit nickname for ${p.nickname}`}
+                              className="h-8 w-36 rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none focus:border-primary"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Save nickname"
+                              disabled={pending}
+                              onClick={() => saveNick(p.id, p.nickname)}
+                              className="text-primary hover:opacity-80 disabled:opacity-50"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Cancel editing"
+                              onClick={cancelEditNick}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="group flex items-center gap-1.5">
+                            <span>{p.nickname}</span>
+                            <button
+                              type="button"
+                              aria-label={`Rename ${p.nickname}`}
+                              onClick={() => startEditNick(p.id, p.nickname)}
+                              className="text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     {batches.length > 0 ? (
