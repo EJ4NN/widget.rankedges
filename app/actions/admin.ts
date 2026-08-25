@@ -517,6 +517,17 @@ export async function setParticipantStatus(id: number, status: string) {
   revalidatePath("/admin")
 }
 
+/** Rename a participant's display nickname (shown on the public leaderboard). */
+export async function setParticipantNickname(id: number, nickname: string) {
+  await assertCanManageParticipant(id)
+  const trimmed = nickname.trim()
+  if (!trimmed) return { ok: false as const, error: "Nickname cannot be empty" }
+  if (trimmed.length > 60) return { ok: false as const, error: "Nickname is too long (max 60 characters)" }
+  await db.update(participant).set({ nickname: trimmed }).where(eq(participant.id, id))
+  revalidatePath("/admin")
+  return { ok: true as const, nickname: trimmed }
+}
+
 export async function setParticipantsStatus(ids: number[], status: string) {
   await requireAdmin()
   if (ids.length === 0) return { ok: false as const, updated: 0 }
