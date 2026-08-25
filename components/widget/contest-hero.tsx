@@ -109,7 +109,7 @@ export function ContestHero({
         ) : (
           <p className="text-sm text-muted-foreground">
             {contest.dataSource === "aimsranking"
-              ? "Free to enter. Add your MT4 login to compete."
+              ? "Free to enter. Add your MT4/MT5 login to compete."
               : "Free to enter. Connect your MT4/MT5 account to compete."}
           </p>
         )}
