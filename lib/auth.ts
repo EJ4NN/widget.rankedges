@@ -26,11 +26,17 @@ export const auth = betterAuth({
     ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
       : []),
+    // Production custom domain the app is actually served from. The Vercel-
+    // generated URLs above don't cover this, so it must be trusted explicitly
+    // to avoid "Invalid origin" on sign-in from contest.rankedges.com.
+    "https://contest.rankedges.com",
+    "https://www.contest.rankedges.com",
     // v0 preview + Vercel deployment hosts are served from rotating subdomains,
     // so trust their wildcard domains to avoid "Invalid origin" errors.
     "*.vusercontent.net",
     "*.v0.app",
     "*.vercel.app",
+    "*.rankedges.com",
   ],
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
