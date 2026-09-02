@@ -3,7 +3,6 @@ import { db } from "@/lib/db"
 import { contest } from "@/lib/db/schema"
 import { desc } from "drizzle-orm"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { formatDate, formatMoney } from "@/lib/format"
 import { BrandLogo, PoweredBy } from "@/components/widget/brand"
 import { getBranding } from "@/app/actions/admin"
@@ -22,9 +21,6 @@ export default async function HomePage() {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <BrandLogo logoUrl={branding.logoUrl} coBrandUrl={branding.coBrandUrl} />
-          <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/admin" />}>
-            Admin
-          </Button>
         </div>
       </header>
 
