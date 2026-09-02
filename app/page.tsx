@@ -25,7 +25,7 @@ export default async function HomePage() {
       </header>
 
       <section className="mx-auto max-w-7xl px-4 py-12">
-        <div className="max-w-2xl">
+        <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
             Compete in live trading contests
           </h1>
