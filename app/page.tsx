@@ -19,7 +19,7 @@ export default async function HomePage() {
   return (
     <main className="min-h-svh bg-background">
       <header className="border-b border-border">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-center px-4 py-4">
           <BrandLogo logoUrl={branding.logoUrl} coBrandUrl={branding.coBrandUrl} />
         </div>
       </header>
