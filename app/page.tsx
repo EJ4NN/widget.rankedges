@@ -24,7 +24,7 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-5xl px-4 py-12">
+      <section className="mx-auto max-w-7xl px-4 py-12">
         <div className="max-w-2xl">
           <h1 className="text-balance text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
             Compete in live trading contests
@@ -35,7 +35,7 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {contests.length === 0 ? (
             <div className="col-span-full rounded-xl border border-border bg-card p-10 text-center">
               <p className="font-medium text-foreground">No contests yet</p>
