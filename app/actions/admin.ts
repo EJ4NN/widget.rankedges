@@ -1006,10 +1006,13 @@ async function syncViaAimsRanking(
       continue
     }
 
-    // RankEdges gain: profit relative to total deposit only, ignoring
-    // withdrawals. profit comes from the AIMS ProfitLoss field (fallback to
-    // equity - deposit if not provided). If there's no deposit, gain is 0.
-    const profit = m.profit || m.equity - m.deposits
+    // RankEdges gain: profit relative to total deposit. profit comes from the
+    // AIMS ProfitLoss field; when it's absent we reconstruct it from
+    // equity - deposits + withdrawals. Adding withdrawals back is critical:
+    // equity = deposits - withdrawals + profit, so a trader who withdrew funds
+    // would otherwise have that withdrawal miscounted as a trading loss. If
+    // there's no deposit, gain is 0.
+    const profit = m.profit || m.equity - m.deposits + m.withdrawals
     const rankEdgesGain = m.deposits > 0 ? (profit / m.deposits) * 100 : 0
 
     // RankEdges gain is our own metric (profit / deposit). `gain` keeps the raw
@@ -1174,7 +1177,10 @@ export async function compareContestSources(contestId: number) {
       } else if (!m.hasResult) {
         aims = UNAVAILABLE("Registered — no results yet")
       } else {
-        const profit = m.profit || m.equity - m.deposits
+        // Reconstruct profit from equity - deposits + withdrawals when AIMS
+        // doesn't report ProfitLoss, so withdrawn funds aren't counted as a
+        // trading loss (equity = deposits - withdrawals + profit).
+        const profit = m.profit || m.equity - m.deposits + m.withdrawals
         aims = {
           available: true,
           equity: m.equity,
