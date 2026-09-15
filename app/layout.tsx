@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/next"
 import type { Metadata, Viewport } from "next"
 import { Space_Grotesk, Rajdhani, JetBrains_Mono } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
+import { ParticleBackground } from "@/components/widget/particle-background"
 import "./globals.css"
 
 const spaceGrotesk = Space_Grotesk({
@@ -78,6 +79,7 @@ export default function RootLayout({
       className={`dark ${spaceGrotesk.variable} ${rajdhani.variable} ${jetbrainsMono.variable}`}
     >
       <body className="bg-background font-sans antialiased">
+        <ParticleBackground />
         {children}
         <Toaster />
         {process.env.NODE_ENV === "production" && <Analytics />}

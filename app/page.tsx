@@ -17,7 +17,7 @@ export default async function HomePage() {
   const branding = await getBranding()
 
   return (
-    <main className="min-h-svh bg-background">
+    <main className="relative z-10 min-h-svh">
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-5xl items-center justify-center px-4 py-4">
           <BrandLogo logoUrl={branding.logoUrl} coBrandUrl={branding.coBrandUrl} />

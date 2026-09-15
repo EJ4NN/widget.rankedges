@@ -133,9 +133,11 @@
   /* Ambient gold + sky-blue glow over the navy-black base, matching AIMS */
   body {
     background:
-      radial-gradient(circle at 78% 10%, hsl(199 96% 62% / 0.08), transparent 22rem),
-      radial-gradient(circle at 16% 28%, hsl(41 90% 58% / 0.055), transparent 25rem),
+      radial-gradient(circle at 78% 8%, hsl(199 96% 62% / 0.1), transparent 24rem),
+      radial-gradient(circle at 14% 22%, hsl(41 90% 58% / 0.08), transparent 26rem),
+      radial-gradient(circle at 50% 105%, hsl(214 96% 60% / 0.06), transparent 30rem),
       var(--background);
+    background-attachment: fixed;
   }
 }
 
