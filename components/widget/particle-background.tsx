@@ -46,11 +46,11 @@ export function ParticleBackground() {
       return {
         x: Math.random() * width,
         y: seedY ?? Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.12,
-        vy: -(0.08 + Math.random() * 0.28),
-        size: 0.6 + Math.random() * 1.8,
+        vx: (Math.random() - 0.5) * 0.14,
+        vy: -(0.1 + Math.random() * 0.32),
+        size: 1 + Math.random() * 2.4,
         hue,
-        alpha: 0.15 + Math.random() * 0.45,
+        alpha: 0.4 + Math.random() * 0.5,
         twinkle: Math.random() * Math.PI * 2,
       }
     }
@@ -63,7 +63,7 @@ export function ParticleBackground() {
       canvas.height = Math.floor(height * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       // Density scales with viewport area, capped for performance.
-      const target = Math.min(90, Math.round((width * height) / 22000))
+      const target = Math.min(140, Math.round((width * height) / 13000))
       particles = Array.from({ length: target }, () => makeParticle())
     }
 
@@ -83,8 +83,8 @@ export function ParticleBackground() {
         ctx.beginPath()
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
         ctx.fillStyle = `rgba(${rgb}, ${a})`
-        ctx.shadowBlur = p.size * 4
-        ctx.shadowColor = `rgba(${rgb}, ${a * 0.8})`
+        ctx.shadowBlur = p.size * 6
+        ctx.shadowColor = `rgba(${rgb}, ${a})`
         ctx.fill()
       }
       ctx.shadowBlur = 0

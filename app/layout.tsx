@@ -78,7 +78,7 @@ export default function RootLayout({
       lang="en"
       className={`dark ${spaceGrotesk.variable} ${rajdhani.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="bg-background font-sans antialiased">
+      <body className="font-sans antialiased">
         <ParticleBackground />
         {children}
         <Toaster />
