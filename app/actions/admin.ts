@@ -1006,13 +1006,15 @@ async function syncViaAimsRanking(
       continue
     }
 
-    // RankEdges gain: profit relative to total deposit. profit comes from the
-    // AIMS ProfitLoss field; when it's absent we reconstruct it from
-    // equity - deposits + withdrawals. Adding withdrawals back is critical:
-    // equity = deposits - withdrawals + profit, so a trader who withdrew funds
-    // would otherwise have that withdrawal miscounted as a trading loss. If
-    // there's no deposit, gain is 0.
-    const profit = m.profit || m.equity - m.deposits + m.withdrawals
+    // RankEdges gain: true trading P/L relative to gross deposit. We do NOT
+    // trust AIMS's ProfitLoss field — it is withdrawal-blind (it equals
+    // equity - grossDeposit), so a trader who withdrew funds has that
+    // withdrawal miscounted as a trading loss. AIMS reports withdrawals as a
+    // negative number, so netDeposit = deposits + withdrawals (capital the
+    // trader actually left in) and profit = equity - netDeposit. The gain %
+    // divides by gross deposit. If there's no deposit, gain is 0.
+    const netDeposit = m.deposits + m.withdrawals
+    const profit = m.equity - netDeposit
     const rankEdgesGain = m.deposits > 0 ? (profit / m.deposits) * 100 : 0
 
     // RankEdges gain is our own metric (profit / deposit). `gain` keeps the raw
@@ -1177,10 +1179,12 @@ export async function compareContestSources(contestId: number) {
       } else if (!m.hasResult) {
         aims = UNAVAILABLE("Registered — no results yet")
       } else {
-        // Reconstruct profit from equity - deposits + withdrawals when AIMS
-        // doesn't report ProfitLoss, so withdrawn funds aren't counted as a
-        // trading loss (equity = deposits - withdrawals + profit).
-        const profit = m.profit || m.equity - m.deposits + m.withdrawals
+        // Always recompute trading P/L: AIMS's ProfitLoss is withdrawal-blind
+        // (equity - grossDeposit), which books withdrawals as trading losses.
+        // Withdrawals arrive negative, so netDeposit = deposits + withdrawals
+        // and profit = equity - netDeposit; the gain % divides by gross deposit.
+        const netDeposit = m.deposits + m.withdrawals
+        const profit = m.equity - netDeposit
         aims = {
           available: true,
           equity: m.equity,
