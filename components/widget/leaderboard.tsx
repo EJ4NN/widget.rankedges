@@ -42,11 +42,11 @@ const PODIUM = [
   { ring: "accent" as const, glow: "var(--shadow-accent-glow)", label: "1st", icon: Crown, accent: "text-accent" },
   { ring: "primary" as const, glow: "var(--shadow-glow)", label: "2nd", icon: Trophy, accent: "text-primary" },
   {
-    ring: "violet" as const,
-    glow: "0 0 22px hsl(258 100% 74% / 0.2)",
+    ring: "secondary" as const,
+    glow: "var(--shadow-secondary-glow)",
     label: "3rd",
     icon: Medal,
-    accent: "text-[var(--violet-neon)]",
+    accent: "text-[var(--royal-blue)]",
   },
 ]
 

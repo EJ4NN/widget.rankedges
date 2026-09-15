@@ -12,7 +12,7 @@ export function TraderAvatar({
   src?: string | null
   size?: number
   className?: string
-  ring?: "primary" | "accent" | "violet" | "none"
+  ring?: "primary" | "accent" | "secondary" | "none"
 }) {
   const url = traderAvatar(nickname, src)
   const ringClass =
@@ -20,8 +20,8 @@ export function TraderAvatar({
       ? "ring-2 ring-primary/70"
       : ring === "accent"
         ? "ring-2 ring-accent/70"
-        : ring === "violet"
-          ? "ring-2 ring-[var(--violet-neon)]/70"
+        : ring === "secondary"
+          ? "ring-2 ring-[var(--royal-blue)]/70"
           : "ring-1 ring-border"
   return (
     <span

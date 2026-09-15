@@ -221,7 +221,7 @@ export function JoinDialog({
                         className={
                           "flex h-14 items-center justify-center rounded-xl border text-base font-bold uppercase tracking-wide transition-colors " +
                           (platform === p
-                            ? "border-primary bg-primary/10 text-primary shadow-[0_0_20px_hsl(82_100%_64%/0.12)]"
+                            ? "border-primary bg-primary/10 text-primary shadow-[0_0_20px_var(--primary-glow-soft)]"
                             : "border-border bg-secondary text-muted-foreground hover:border-primary/40 hover:text-foreground")
                         }
                       >
