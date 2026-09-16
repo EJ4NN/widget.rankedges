@@ -5,8 +5,11 @@ import { getBranding } from "@/app/actions/admin"
 import { withEffectiveStatus } from "@/lib/contest-status"
 import { LandingNav } from "@/components/home/landing-nav"
 import { LandingHero } from "@/components/home/landing-hero"
-import { ContestMenu, type MenuContest } from "@/components/home/contest-menu"
 import { HowItWorks } from "@/components/home/how-it-works"
+import { ContestMenu, type MenuContest } from "@/components/home/contest-menu"
+import { FeaturesSection } from "@/components/home/features-section"
+import { PrizesSection } from "@/components/home/prizes-section"
+import { FaqSection } from "@/components/home/faq-section"
 import { LandingFooter } from "@/components/home/landing-footer"
 
 export const dynamic = "force-dynamic"
@@ -29,19 +32,15 @@ export default async function HomePage() {
     thumbnailUrl: c.thumbnailUrl,
   }))
 
-  const liveCount = contests.filter((c) => c.status === "live").length
-  const stats = [
-    { value: String(liveCount), label: liveCount === 1 ? "Live contest" : "Live contests" },
-    { value: String(contests.length), label: "Total contests" },
-    { value: "MT4 / MT5", label: "Platforms" },
-  ]
-
   return (
     <main className="relative z-10 min-h-svh">
       <LandingNav logoUrl={branding.logoUrl} coBrandUrl={branding.coBrandUrl} />
-      <LandingHero stats={stats} />
-      <ContestMenu contests={menuContests} />
+      <LandingHero />
       <HowItWorks />
+      <ContestMenu contests={menuContests} />
+      <FeaturesSection />
+      <PrizesSection />
+      <FaqSection />
       <LandingFooter logoUrl={branding.logoUrl} />
     </main>
   )

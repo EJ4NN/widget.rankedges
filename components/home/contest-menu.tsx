@@ -35,14 +35,14 @@ export function ContestMenu({ contests }: { contests: MenuContest[] }) {
 
   return (
     <section id="contests" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
-      <div className="flex flex-col gap-2 text-center">
-        <p className="eyebrow-mono">The Arena</p>
+      <div className="max-w-2xl">
+        <p className="eyebrow-mono">The contest menu</p>
         <h2 className="text-balance font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Choose your contest
+          Pick your arena
         </h2>
-        <p className="mx-auto mt-1 max-w-xl text-pretty leading-relaxed text-muted-foreground">
-          Live rankings sync automatically from every entrant&apos;s trading account. Tap a contest
-          to open it on RankEdges.
+        <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+          Every arena runs live on RankEdges with real-time MT4/MT5 leaderboards. Tap a contest to
+          open it on RankEdges and join the field.
         </p>
       </div>
 

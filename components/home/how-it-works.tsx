@@ -3,29 +3,29 @@ import { Link2, LineChart, Trophy } from "lucide-react"
 const STEPS = [
   {
     icon: Link2,
-    title: "Connect your account",
-    body: "Register your live MT4 or MT5 account for a contest. No extra software — your trades sync automatically.",
+    title: "Connect your MT4/MT5 account",
+    body: "Link a live or demo trading account through your broker in minutes. RankEdges reads your trade history — no manual entry, no spreadsheets.",
   },
   {
     icon: LineChart,
     title: "Trade your strategy",
-    body: "Trade the contest window your way. Gains, balance, and equity update on the leaderboard in real time.",
+    body: "Keep trading the way you already do. Every position you open feeds directly into your contest stats — gain, drawdown, and lots, tracked automatically.",
   },
   {
     icon: Trophy,
-    title: "Climb the leaderboard",
-    body: "Outperform the field on ranked metrics and claim your place among the top traders for prizes and recognition.",
+    title: "Climb the live leaderboard",
+    body: "Watch your rank move in real time as the field trades. Finish on top when the arena closes to claim prizes and arena standing.",
   },
 ]
 
 export function HowItWorks() {
   return (
-    <section className="border-y border-border/50 bg-card/30">
+    <section id="how" className="scroll-mt-20 border-y border-border/50 bg-card/30">
       <div className="mx-auto max-w-6xl px-4 py-16">
-        <div className="text-center">
+        <div>
           <p className="eyebrow-mono">How it works</p>
           <h2 className="mt-3 text-balance font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            From account to arena in three steps
+            Three steps into the arena
           </h2>
         </div>
 
